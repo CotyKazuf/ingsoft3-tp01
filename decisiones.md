@@ -31,3 +31,6 @@ Verifiqué las indicaciones observando los resultados de cada comando en la term
 Al probar los endpoints del backend localmente en Windows con PowerShell, tanto `curl` (que en PowerShell es en realidad un alias de `Invoke-WebRequest`) como `curl.exe` con comillas escapadas fallaron: PowerShell no maneja bien el escapado de comillas dobles al pasarle argumentos a un programa externo, lo que hacía llegar el JSON roto al backend.
 
 Se resolvió usando el cmdlet nativo de PowerShell `Invoke-RestMethod`, armando el body como un objeto de PowerShell y convirtiéndolo con `ConvertTo-Json` antes de enviarlo — así se evita depender del escapado de comillas en la línea de comandos.
+
+
+Al conectar el backend a PostgreSQL, la librería `dotenv` (usada para leer el archivo `.env`) mostró en la consola un mensaje de "tip" con un link a un proyecto externo del propio autor de la librería (`vestauth.com`). Se verificó que el paquete instalado es el oficial —el hash de integridad coincide con el registrado en npm y el código fuente corresponde al repositorio oficial `motdotla/dotenv`—: es una función real de las versiones recientes de la librería que muestra tips aleatorios, no un problema de seguridad. Se resolvió agregando la opción `{ quiet: true }` a `dotenv.config()` para que no aparezca ningún mensaje adicional en consola durante la demostración.
