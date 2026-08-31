@@ -10,6 +10,48 @@ const CATEGORIAS = ['Comida', 'Transporte', 'Vivienda', 'Entretenimiento', 'Salu
 const MEDIOS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta'];
 const TIPOS_TARJETA = ['Débito', 'Crédito'];
 
+// Fecha de hoy en formato YYYY-MM-DD, en horario local del servidor.
+function hoyISO() {
+    const ahora = new Date();
+    const sinOffset = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+    return sinOffset.toISOString().slice(0, 10);
+}
+
+// Valida los campos de un gasto. Con parcial=true (usado en PUT), un campo
+// undefined se omite (se conserva el valor actual); si viene presente, igual
+// se valida con las mismas reglas que en la creación.
+function validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo }, { parcial = false } = {}) {
+    if ((!parcial || descripcion !== undefined) && (!descripcion || descripcion.trim() === '')) {
+        return 'La descripción es obligatoria';
+    }
+    if ((!parcial || monto !== undefined) && (typeof monto !== 'number' || monto <= 0)) {
+        return 'El monto debe ser un número mayor a 0';
+    }
+    if ((!parcial || categoria !== undefined) && !CATEGORIAS.includes(categoria)) {
+        return 'Categoría inválida';
+    }
+    if (!parcial || fecha !== undefined) {
+        if (!fecha || isNaN(Date.parse(fecha))) {
+            return 'Fecha inválida';
+        }
+        const fechaStr = String(fecha).slice(0, 10);
+        if (fechaStr > hoyISO()) {
+            return 'La fecha no puede ser futura';
+        }
+        const anioActual = new Date().getFullYear();
+        if (fechaStr.slice(0, 4) !== String(anioActual)) {
+            return `La fecha debe ser del año ${anioActual}`;
+        }
+    }
+    if ((!parcial || medioPago !== undefined) && !MEDIOS_PAGO.includes(medioPago)) {
+        return 'Medio de pago inválido';
+    }
+    if (tipo && !TIPOS_TARJETA.includes(tipo)) {
+        return 'Tipo de tarjeta inválido';
+    }
+    return null;
+}
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
@@ -30,23 +72,9 @@ app.get('/api/gastos', async (req, res) => {
 app.post('/api/gastos', async (req, res) => {
     const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = req.body;
 
-    if (!descripcion || descripcion.trim() === '') {
-        return res.status(400).json({ error: 'La descripción es obligatoria' });
-    }
-    if (typeof monto !== 'number' || monto <= 0) {
-        return res.status(400).json({ error: 'El monto debe ser un número mayor a 0' });
-    }
-    if (!CATEGORIAS.includes(categoria)) {
-        return res.status(400).json({ error: 'Categoría inválida' });
-    }
-    if (!fecha || isNaN(Date.parse(fecha))) {
-        return res.status(400).json({ error: 'Fecha inválida' });
-    }
-    if (!MEDIOS_PAGO.includes(medioPago)) {
-        return res.status(400).json({ error: 'Medio de pago inválido' });
-    }
-    if (tipo && !TIPOS_TARJETA.includes(tipo)) {
-        return res.status(400).json({ error: 'Tipo de tarjeta inválido' });
+    const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo });
+    if (errorValidacion) {
+        return res.status(400).json({ error: errorValidacion });
     }
 
     try {
@@ -72,6 +100,11 @@ app.put('/api/gastos/:id', async (req, res) => {
         }
         const actual = existente.rows[0];
         const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = req.body;
+
+        const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo }, { parcial: true });
+        if (errorValidacion) {
+            return res.status(400).json({ error: errorValidacion });
+        }
 
         const result = await pool.query(
             `UPDATE gastos SET descripcion = $1, monto = $2, categoria = $3, fecha = $4,

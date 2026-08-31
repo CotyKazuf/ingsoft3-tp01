@@ -1,0 +1,388 @@
+:root {
+  --c1: #001D39;
+  --c2: #0A4174;
+  --c3: #49769F;
+  --c4: #4E8EA2;
+  --c5: #6EA2B3;
+  --c6: #7BBDE8;
+  --c7: #BDD8E9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #FAFCFE;
+  color: var(--c1);
+}
+
+/* ---- Header ---- */
+header {
+  background: var(--c1);
+  color: white;
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.acciones-header {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-agregar {
+  background: var(--c6);
+  color: var(--c1);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---- Fila de totales ---- */
+.fila-totales {
+  display: flex;
+  gap: 16px;
+  padding: 24px 30px 0 30px;
+  align-items: stretch;
+}
+
+.tarjeta-total {
+  flex: 0 0 200px;
+  background: var(--c1);
+  color: white;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 29, 57, 0.25);
+}
+
+.tarjeta-total small {
+  opacity: 0.75;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tarjeta-total .monto {
+  font-size: 30px;
+  font-weight: bold;
+  margin-top: 6px;
+}
+
+.grid-categorias {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.tarjeta-cat {
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 29, 57, 0.12);
+}
+
+.tarjeta-cat small {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.tarjeta-cat .monto {
+  font-size: 19px;
+  font-weight: bold;
+  margin-top: 6px;
+}
+
+.cat-comida {
+  background: var(--c2);
+  color: white;
+}
+
+.cat-transporte {
+  background: var(--c3);
+  color: white;
+}
+
+.cat-vivienda {
+  background: var(--c4);
+  color: white;
+}
+
+.cat-entretenimiento {
+  background: var(--c5);
+  color: white;
+}
+
+.cat-salud {
+  background: var(--c6);
+  color: var(--c1);
+}
+
+.cat-otros {
+  background: var(--c7);
+  color: var(--c1);
+}
+
+/* ---- Filtro ---- */
+.filtro {
+  padding: 24px 30px 0 30px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.filtro select {
+  border: 1px solid var(--c3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--c1);
+  background: white;
+}
+
+/* ---- Lista de gastos ---- */
+.lista {
+  padding: 16px 30px 30px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+}
+
+.fila-gasto {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 4px rgba(0, 29, 57, 0.10);
+  border-left: 5px solid var(--c3);
+}
+
+.b-comida {
+  border-left-color: var(--c2);
+}
+
+.b-transporte {
+  border-left-color: var(--c3);
+}
+
+.b-vivienda {
+  border-left-color: var(--c4);
+}
+
+.b-entretenimiento {
+  border-left-color: var(--c5);
+}
+
+.b-salud {
+  border-left-color: var(--c6);
+}
+
+.b-otros {
+  border-left-color: var(--c7);
+}
+
+.info-gasto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chip-categoria {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+
+.chip-comida {
+  background: var(--c2);
+  color: white;
+}
+
+.chip-transporte {
+  background: var(--c3);
+  color: white;
+}
+
+.chip-vivienda {
+  background: var(--c4);
+  color: white;
+}
+
+.chip-entretenimiento {
+  background: var(--c5);
+  color: white;
+}
+
+.chip-salud {
+  background: var(--c6);
+  color: var(--c1);
+}
+
+.chip-otros {
+  background: var(--c7);
+  color: var(--c1);
+}
+
+.desc {
+  font-weight: 600;
+  color: var(--c1);
+}
+
+.medio {
+  font-size: 12px;
+  color: #888;
+}
+
+.monto-fila {
+  font-weight: bold;
+  color: var(--c1);
+  margin-right: 10px;
+}
+
+.acciones button {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-left: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: white;
+}
+
+.btn-editar {
+  background: var(--c3);
+}
+
+.btn-eliminar {
+  background: #a85a5a;
+}
+
+/* ---- Resumen anual (por mes) ---- */
+.grid-meses {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 24px 30px 30px 30px;
+}
+
+.tarjeta-mes {
+  background: var(--c2);
+  color: white;
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 29, 57, 0.12);
+}
+
+.tarjeta-mes small {
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.tarjeta-mes .monto {
+  font-size: 22px;
+  font-weight: bold;
+  margin-top: 8px;
+}
+
+/* ---- Formulario (lo usamos en el próximo paso) ---- */
+.contenedor-form {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.card-form {
+  background: white;
+  border-radius: 14px;
+  padding: 30px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 4px 14px rgba(0, 29, 57, 0.15);
+}
+
+.card-form h2 {
+  margin-top: 0;
+  color: var(--c1);
+}
+
+.mensaje-error {
+  background: #f8e3e3;
+  color: #a85a5a;
+  border: 1px solid #a85a5a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.campo {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.campo label {
+  font-size: 12px;
+  color: var(--c3);
+  font-weight: 600;
+}
+
+.campo input,
+.campo select {
+  border: 1px solid var(--c6);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--c1);
+  background: var(--c7);
+  color-scheme: light;
+}
+
+.btn-guardar {
+  background: var(--c1);
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  width: 100%;
+  font-size: 15px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.btn-volver {
+  background: none;
+  border: none;
+  color: var(--c3);
+  text-decoration: underline;
+  cursor: pointer;
+  display: block;
+  margin: 12px auto 0 auto;
+  font-size: 13px;
+}
