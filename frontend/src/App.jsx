@@ -20,8 +20,19 @@ function App() {
 
   const eliminarGasto = (id) => {
     fetch(`/api/gastos/${id}`, { method: 'DELETE' })
-      .then(() => cargarGastos())
-      .catch((err) => console.error('Error al eliminar gasto:', err))
+      .then((res) => {
+        if (res.ok) {
+          cargarGastos()
+          return
+        }
+        return res.json().then((data) => {
+          throw new Error(data.error || 'No se pudo eliminar el gasto')
+        })
+      })
+      .catch((err) => {
+        console.error('Error al eliminar gasto:', err)
+        alert(err.message)
+      })
   }
 
   const guardarGasto = () => {
