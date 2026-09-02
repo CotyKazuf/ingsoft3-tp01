@@ -80,3 +80,15 @@ Se ejecuta `docker compose down` (sin `-v`), que borra los 3 contenedores y la r
 ![Datos perdidos tras down -v](img/datos-perdidos.png)
 
 Se ejecuta `docker compose down -v`, esta vez sí incluyendo la `-v`. El log confirma `Volume ingsoft3-tp01_db_data Removed`, a diferencia del `down` sin `-v` del punto anterior. Al volver a levantar el sistema con `docker compose up -d`, Postgres crea un volumen nuevo desde cero (con la tabla `gastos` vacía otra vez, por el `init.sql`), y la aplicación en `localhost:8080` no muestra ningún gasto. Contrastando este resultado con el del punto 8, queda demostrada la diferencia entre `docker compose down` (los datos sobreviven) y `docker compose down -v` (los datos se pierden junto con el volumen).
+
+### 10. Publicación de las imágenes en GHCR
+
+![Pull desde GHCR](img/registry-pull.png)
+
+Se etiquetan y suben (`docker tag` + `docker push`) las imágenes `mi-backend:dev` y `mi-frontend:dev` a GitHub Container Registry, como `ghcr.io/cotykazuf/ingsoft3-tp01-backend:v0.1.0` y `ghcr.io/cotykazuf/ingsoft3-tp01-frontend:v0.1.0`. Para probar que el sistema puede levantar usando esas imágenes publicadas y no imágenes locales, se borran previamente todas las imágenes locales con esos nombres (`docker rmi`) y se levanta el sistema con `docker compose -f docker-compose.registry.yml up -d` — un compose donde `backend` y `frontend` usan `image:` en vez de `build:`. El log muestra `frontend Pulled` y `backend Pulled`, confirmando que las imágenes se descargaron de GHCR, y los 3 contenedores quedan `Healthy`/`Started`.
+
+### 11. Las imágenes son realmente públicas (prueba sin login)
+
+![Registry público sin login](img/registry-publico-sin-login.png)
+
+Para demostrar que las imágenes no solo son accesibles porque la sesión sigue autenticada, se repite la prueba en un escenario más estricto: `docker compose -f docker-compose.registry.yml down`, `docker logout ghcr.io` (elimina las credenciales guardadas), se borran de nuevo las imágenes locales, y se vuelve a correr `docker compose -f docker-compose.registry.yml up -d` **sin ninguna sesión iniciada en GHCR**. El resultado es idéntico: `frontend Pulled`, `backend Pulled`, todo arriba y sano. Esto confirma que ambas imágenes están configuradas como públicas en GHCR — cualquiera puede descargarlas sin necesitar acceso a la cuenta de GitHub del proyecto.

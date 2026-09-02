@@ -59,6 +59,15 @@ Al armar el Dockerfile multi-stage del backend, después de un build exitoso, el
 - Los secretos (usuario, contraseña y nombre de la base) se sacaron a un `.env` en la raíz, ignorado por git, con un `.env.example` commiteado como plantilla — se verificó con `git check-ignore -v .env` que el `.gitignore` ya existente lo cubre, sin necesidad de agregar una regla nueva.
 - Se probó explícitamente la diferencia entre `docker compose down` (los datos sobreviven porque el volumen no se toca) y `docker compose down -v` (el volumen se borra junto con los contenedores y los datos se pierden), cargando gastos de prueba en cada caso y verificando el resultado en la aplicación.
 - La base de datos que usa este Compose es independiente de la base de Postgres local de Windows usada durante el desarrollo (F3/F4): son dos instancias completamente separadas, cada una con sus propios datos.
+
+### Decisiones tomadas — TP2 (Publicación en GHCR)
+
+- Se eligió GHCR (`ghcr.io`) como registry, autenticando con un Personal Access Token (scope `write:packages`) en vez de la contraseña de la cuenta de GitHub.
+- Las imágenes se etiquetaron como `ghcr.io/cotykazuf/ingsoft3-tp01-backend:v0.1.0` y `ghcr.io/cotykazuf/ingsoft3-tp01-frontend:v0.1.0` — el formato `ghcr.io/<usuario>/<nombre>:<tag>` es el que exige GHCR para poder resolver a qué cuenta pertenece cada imagen.
+- Se creó `docker-compose.registry.yml` como archivo separado del `docker-compose.yml` original: `backend` y `frontend` usan `image:` (apuntando a GHCR) en lugar de `build:`, para que Compose las descargue en vez de construirlas desde el código local.
+- Para probar de verdad que el sistema levanta con las imágenes publicadas (y no con una copia local con el mismo nombre), se borraron explícitamente las imágenes locales con `docker rmi` antes de cada prueba con `docker compose -f docker-compose.registry.yml up`. El log mostró `Pulled` para ambos servicios, confirmando la descarga real.
+- Para demostrar que las imágenes son públicas de verdad (y no accesibles solo porque la sesión seguía autenticada), se repitió la prueba después de un `docker logout ghcr.io` explícito — funcionó igual, sin ninguna credencial activa.
+- La visibilidad de ambos paquetes se cambió a pública manualmente desde GitHub (Package settings → Change visibility), ya que por defecto un paquete subido a una cuenta personal de GHCR queda privado.
 ## F4 — Frontend funcional
 
 ### Alcance
