@@ -1,5 +1,7 @@
 # Mis Gastos
 
+[![CI](https://github.com/CotyKazuf/ingsoft3-tp01/actions/workflows/ci.yml/badge.svg)](https://github.com/CotyKazuf/ingsoft3-tp01/actions/workflows/ci.yml)
+
 Aplicación de seguimiento de gastos personales: backend en Node/Express, frontend en
 React (Vite) servido por nginx, y base de datos PostgreSQL. Repositorio del semestre
 para Ingeniería de Software III.
