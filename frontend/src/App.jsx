@@ -7,6 +7,17 @@ import './App.css'
 
 
 
+const verificarSalud = () =>
+  fetch('/health')
+    .then((res) => {
+      if (!res.ok) throw new Error(`Estado HTTP ${res.status}`)
+      return res.json()
+    })
+    .then((data) => {
+      if (data.status !== 'ok') throw new Error('Respuesta de salud inválida')
+    })
+    .catch((err) => console.error('El backend no está disponible:', err))
+
 function App() {
   const [gastos, setGastos] = useState([])
   const [gastoEditando, setGastoEditando] = useState(null)
@@ -39,6 +50,7 @@ function App() {
 
   const guardarGasto = () => {
     setGastoEditando(null)
+    verificarSalud()
     cargarGastos()
   }
 
