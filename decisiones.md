@@ -114,6 +114,25 @@ después de desloguearme de GHCR, para confirmar que las imágenes son públicas
 y no accesibles solo porque tenía sesión iniciada. Además, contrasté cada archivo
 generado contra la consigna oficial del TP2, línea por línea, antes de darlo por
 terminado.
+## TP3
+
+### Duración del sprint
+
+Elegí un sprint de 2 días (miércoles 2/9 a viernes 4/9), en vez de una duración típica de
+industria (1 a 4 semanas). La razón es el calendario real de la cursada: el único hito
+confirmado que tengo es la defensa de P1 el viernes 4/9, así que el sprint cubre exactamente
+la ventana de tiempo que tengo disponible hasta ese momento. Un sprint de una o dos semanas,
+como se ve en proyectos de industria, ni siquiera terminaría antes de tener que mostrar el
+trabajo — no tendría sentido para mi contexto real.
+
+### Límite de trabajo en progreso (WIP)
+
+Configuré el límite en 2, aplicando la regla de arranque "cantidad de personas + 1": trabajo
+sola (1 persona), entonces 1 + 1 = 2. El "+1" es la válvula para el caso real de que una
+tarjeta quede esperando algo (por ejemplo, una revisión) y necesite avanzar en otra cosa sin
+quedarme frenada — pero sin subir tanto el número que el límite deje de cumplir su función,
+que es forzar a terminar antes de empezar algo nuevo.
+
 ## F4 — Frontend funcional
 
 ### Alcance
