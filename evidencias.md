@@ -55,3 +55,28 @@ Se compara el tamaño de la imagen base completa de Node (`node:20`, 1.58GB) con
 ![Frontend standalone](img/frontend-standalone.png)
 
 Se construye la imagen `mi-frontend:dev` (build de Vite servido por nginx) y se levanta un contenedor solo, sin Docker Compose (`docker run -p 8080:80 mi-frontend:dev`). La interfaz carga correctamente en `http://localhost:8080`, pero el total y el listado quedan en $0 / vacío: el contenedor del frontend y el del backend no comparten red, así que el nombre `backend` que usa `nginx.conf` para el proxy todavía no resuelve a ninguna IP. Este comportamiento es el esperado en este punto — se resuelve recién en la Fase 8 (Docker Compose), cuando ambos servicios queden conectados a la misma red.
+
+### 6. Sistema completo levantado con Docker Compose
+
+![Compose up](img/compose-up.png)
+
+Se ejecuta `docker compose up -d --build` en la raíz del repo. Compose construye las imágenes de `backend` y `frontend`, crea el volumen `ingsoft3-tp01_db_data` y levanta los 3 servicios definidos en `docker-compose.yml`. Gracias al `healthcheck` de `db` (`pg_isready`) combinado con `depends_on: condition: service_healthy` en `backend`, el contenedor de Postgres queda en estado `Healthy` antes de que arranquen `backend` y `frontend` (que quedan en `Started`), evitando que el backend intente conectarse a una base de datos que todavía no está lista para aceptar conexiones.
+
+### 7. Aplicación funcionando de punta a punta con Docker Compose
+
+![App funcionando con Compose](img/app-funcionando-compose.png)
+
+Con los 3 contenedores levantados por `docker compose up -d --build`, se accede a `http://localhost:8080` y se agrega un gasto desde la propia interfaz. El dato se guarda correctamente: el navegador le habla a `frontend` (nginx), que reenvía el pedido `/api/...` al contenedor `backend` por el nombre de servicio `backend`, y este se conecta a la base de datos del contenedor `db`. Los gastos que existían antes en la base de Postgres local de Windows no aparecen — es esperado, ya que el servicio `db` de este `docker-compose.yml` es una base nueva y separada, con su propio volumen (`ingsoft3-tp01_db_data`), que arrancó vacía y solo con la tabla `gastos` creada por `backend/db/init.sql`.
+
+### 8. Persistencia de datos: `docker compose down` sin `-v`
+
+![Persistencia de datos](img/persistencia-datos.png)
+
+Se ejecuta `docker compose down` (sin `-v`), que borra los 3 contenedores y la red, pero deja intacto el volumen `ingsoft3-tp01_db_data`. Al volver a levantar el sistema con `docker compose up -d`, Postgres arranca sobre ese mismo volumen y encuentra los datos que ya existían: los gastos cargados antes de bajar el sistema siguen apareciendo en la aplicación. Esto confirma que el volumen declarado en `docker-compose.yml` cumple su función: los datos sobreviven a la eliminación de los contenedores.
+
+### 9. Persistencia de datos: `docker compose down -v` (se pierden los datos)
+
+![Compose down con -v](img/compose-down-v.png)
+![Datos perdidos tras down -v](img/datos-perdidos.png)
+
+Se ejecuta `docker compose down -v`, esta vez sí incluyendo la `-v`. El log confirma `Volume ingsoft3-tp01_db_data Removed`, a diferencia del `down` sin `-v` del punto anterior. Al volver a levantar el sistema con `docker compose up -d`, Postgres crea un volumen nuevo desde cero (con la tabla `gastos` vacía otra vez, por el `init.sql`), y la aplicación en `localhost:8080` no muestra ningún gasto. Contrastando este resultado con el del punto 8, queda demostrada la diferencia entre `docker compose down` (los datos sobreviven) y `docker compose down -v` (los datos se pierden junto con el volumen).
