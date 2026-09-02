@@ -50,6 +50,15 @@ Al armar el Dockerfile multi-stage del backend, después de un build exitoso, el
 - En `nginx.conf`, el `location /` usa `try_files $uri $uri/ /index.html` para que las rutas de React Router (como `/resumen`) devuelvan `index.html` en vez de un 404, ya que esas rutas no son archivos reales del lado del servidor.
 - El proxy hacia el backend (`location /api/`) usa una variable (`set $backend_api ...`) en vez de escribir el nombre `backend` directo en el `proxy_pass`. Así nginx resuelve ese nombre recién cuando llega un pedido real, y no al arrancar — lo que le permite al contenedor del frontend levantar solo (como se probó en esta fase) sin depender de que el backend ya exista.
 - Se probó el contenedor del frontend de forma aislada (sin Compose) para confirmar que nginx sirve bien la aplicación React. Como es esperable, el listado de gastos no cargó porque el nombre `backend` todavía no resuelve a ningún contenedor real — eso se resuelve en la fase de Docker Compose.
+
+### Decisiones tomadas — TP2 (Docker Compose)
+
+- El `docker-compose.yml` declara 3 servicios (`db`, `backend`, `frontend`) conectados por la red interna que crea Compose automáticamente, más un volumen (`db_data`) para la base de datos.
+- Al servicio `db` se le montó, además del volumen persistente, el archivo `backend/db/init.sql` en `/docker-entrypoint-initdb.d/init.sql` — la imagen oficial de Postgres ejecuta automáticamente cualquier script `.sql` que encuentre ahí la primera vez que arranca con un volumen vacío. Así la tabla `gastos` se crea sola, sin pasos manuales.
+- El healthcheck de `db` usa `pg_isready`, y el `backend` usa `depends_on: condition: service_healthy` (no un `depends_on` simple) para no arrancar hasta que Postgres esté realmente aceptando conexiones, no solo iniciado.
+- Los secretos (usuario, contraseña y nombre de la base) se sacaron a un `.env` en la raíz, ignorado por git, con un `.env.example` commiteado como plantilla — se verificó con `git check-ignore -v .env` que el `.gitignore` ya existente lo cubre, sin necesidad de agregar una regla nueva.
+- Se probó explícitamente la diferencia entre `docker compose down` (los datos sobreviven porque el volumen no se toca) y `docker compose down -v` (el volumen se borra junto con los contenedores y los datos se pierden), cargando gastos de prueba en cada caso y verificando el resultado en la aplicación.
+- La base de datos que usa este Compose es independiente de la base de Postgres local de Windows usada durante el desarrollo (F3/F4): son dos instancias completamente separadas, cada una con sus propios datos.
 ## F4 — Frontend funcional
 
 ### Alcance
