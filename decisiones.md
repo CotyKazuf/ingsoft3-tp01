@@ -26,6 +26,28 @@ Verifiqué las indicaciones observando los resultados de cada comando en la term
 
 ## TP2
 
+### Por qué elegí "Mis Gastos" (criterios de la guía, §3.3)
+
+Elegí seguir desarrollando mi propia aplicación, "Mis Gastos" (un registro de gastos
+personales), en vez de adaptar un proyecto de GitHub. La evalúo contra los 4 criterios
+que pide la guía:
+
+- **¿Buildea y corre localmente hoy, sin magia?** Sí. La vengo probando desde el
+  principio en mi propia máquina (backend Node/Express, frontend React/Vite,
+  PostgreSQL), y en este mismo TP2 quedó demostrado que también levanta
+  containerizada, de punta a punta, con un solo comando (`docker compose up -d --build`).
+- **¿Tiene o puede tener tests?** Todavía no tiene tests automatizados — es una deuda
+  pendiente que me toca resolver en el TP5. Al ser una app simple (Express + React,
+  sin lógica compleja), agregar tests unitarios y de integración más adelante es viable
+  sin tener que rehacer nada de lo ya construido.
+- **¿Entiendo el código lo suficiente como para modificarlo?** Totalmente: la escribí
+  yo desde cero, no es un fork ni un proyecto adaptado, así que conozco cada archivo y
+  cada decisión que se tomó.
+- **Tamaño (CRUD + 2-3 pantallas):** Cumple justo lo pedido: tiene 3 pantallas (listado
+  de gastos, formulario de alta/edición, y resumen mensual) y un CRUD completo de
+  gastos (alta, listado, edición, baja), sin funcionalidad de más que sume fricción sin
+  sumar nota.
+
 ### Problemas y cómo se resolvieron
 
 Al probar los endpoints del backend localmente en Windows con PowerShell, tanto `curl` (que en PowerShell es en realidad un alias de `Invoke-WebRequest`) como `curl.exe` con comillas escapadas fallaron: PowerShell no maneja bien el escapado de comillas dobles al pasarle argumentos a un programa externo, lo que hacía llegar el JSON roto al backend.
@@ -53,6 +75,11 @@ Al armar el Dockerfile multi-stage del backend, después de un build exitoso, el
 
 ### Decisiones tomadas — TP2 (Docker Compose)
 
+- **Comunicación entre servicios:** `frontend`, `backend` y `db` se hablan siempre por
+  nombre de servicio, nunca por IP fija ni por `localhost` — Compose crea una red
+  interna con un DNS propio que resuelve esos nombres a la IP real de cada contenedor.
+  Es la misma razón por la que `nginx.conf` usa `backend` en el `proxy_pass`, y por la
+  que `docker-compose.yml` le pasa `DB_HOST: db` al backend.
 - El `docker-compose.yml` declara 3 servicios (`db`, `backend`, `frontend`) conectados por la red interna que crea Compose automáticamente, más un volumen (`db_data`) para la base de datos.
 - Al servicio `db` se le montó, además del volumen persistente, el archivo `backend/db/init.sql` en `/docker-entrypoint-initdb.d/init.sql` — la imagen oficial de Postgres ejecuta automáticamente cualquier script `.sql` que encuentre ahí la primera vez que arranca con un volumen vacío. Así la tabla `gastos` se crea sola, sin pasos manuales.
 - El healthcheck de `db` usa `pg_isready`, y el `backend` usa `depends_on: condition: service_healthy` (no un `depends_on` simple) para no arrancar hasta que Postgres esté realmente aceptando conexiones, no solo iniciado.
@@ -68,6 +95,25 @@ Al armar el Dockerfile multi-stage del backend, después de un build exitoso, el
 - Para probar de verdad que el sistema levanta con las imágenes publicadas (y no con una copia local con el mismo nombre), se borraron explícitamente las imágenes locales con `docker rmi` antes de cada prueba con `docker compose -f docker-compose.registry.yml up`. El log mostró `Pulled` para ambos servicios, confirmando la descarga real.
 - Para demostrar que las imágenes son públicas de verdad (y no accesibles solo porque la sesión seguía autenticada), se repitió la prueba después de un `docker logout ghcr.io` explícito — funcionó igual, sin ninguna credencial activa.
 - La visibilidad de ambos paquetes se cambió a pública manualmente desde GitHub (Package settings → Change visibility), ya que por defecto un paquete subido a una cuenta personal de GHCR queda privado.
+
+### Uso de inteligencia artificial (TP2)
+
+Utilicé Claude (Anthropic) como apoyo para escribir los Dockerfiles multi-stage, el
+`nginx.conf`, el `docker-compose.yml` y el `docker-compose.registry.yml`, y para
+entender los conceptos de Docker involucrados en cada paso (capas y cache, healthchecks,
+DNS interno de Compose, diferencia entre `.env` y `.env.example`, qué es un registry).
+
+Cómo verifiqué lo que generó: no di por buena ninguna configuración sin probarla yo
+misma en mi propia terminal. Cada Dockerfile se probó con un build y un run reales antes
+de pasar a la siguiente fase; la conexión a la base de datos se verificó con el endpoint
+`/health`; el `docker-compose.yml` se probó levantando el sistema completo y usándolo
+desde el navegador; la persistencia se verificó de manera explícita en las dos
+direcciones (`down` conserva los datos, `down -v` los borra); y la publicación en el
+registry se verificó de la forma más exigente posible, repitiendo la prueba de arranque
+después de desloguearme de GHCR, para confirmar que las imágenes son públicas de verdad
+y no accesibles solo porque tenía sesión iniciada. Además, contrasté cada archivo
+generado contra la consigna oficial del TP2, línea por línea, antes de darlo por
+terminado.
 ## F4 — Frontend funcional
 
 ### Alcance
