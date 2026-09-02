@@ -49,3 +49,9 @@ Con el contenedor corriendo, se accede a `http://localhost:3000/health` desde el
 ![Docker images mi-backend](img/docker-images-mibackend.png)
 
 Se compara el tamaño de la imagen base completa de Node (`node:20`, 1.58GB) contra la base liviana usada en la etapa final (`node:20-alpine`, 193MB) y contra la imagen final del backend (`mi-backend:dev`, 200MB). Gracias al build multi-stage, la imagen final queda casi del mismo tamaño que la base alpine, sin arrastrar las herramientas de compilación que usa la etapa de build.
+
+### 5. Frontend servido por nginx (contenedor suelto, sin red compartida)
+
+![Frontend standalone](img/frontend-standalone.png)
+
+Se construye la imagen `mi-frontend:dev` (build de Vite servido por nginx) y se levanta un contenedor solo, sin Docker Compose (`docker run -p 8080:80 mi-frontend:dev`). La interfaz carga correctamente en `http://localhost:8080`, pero el total y el listado quedan en $0 / vacío: el contenedor del frontend y el del backend no comparten red, así que el nombre `backend` que usa `nginx.conf` para el proxy todavía no resuelve a ninguna IP. Este comportamiento es el esperado en este punto — se resuelve recién en la Fase 8 (Docker Compose), cuando ambos servicios queden conectados a la misma red.

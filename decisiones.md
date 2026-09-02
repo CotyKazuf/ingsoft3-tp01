@@ -43,6 +43,13 @@ Al armar el Dockerfile multi-stage del backend, después de un build exitoso, el
 - En el Dockerfile se copian primero `package.json` y `package-lock.json`, y recién después el resto del código fuente. Así, mientras esos dos archivos no cambien, Docker reutiliza la capa cacheada de `npm ci` en builds siguientes aunque se haya modificado el código.
 - El `.dockerignore` del backend excluye `node_modules/`, `.env`, `.env.example` y los logs de npm, para no filtrar secretos ni arrastrar dependencias locales al contexto del build.
 - Para probar el contenedor conectándose a la base de datos real (que corre en Windows, fuera de Docker), se usó `--add-host=host.docker.internal:host-gateway` y `DB_HOST=host.docker.internal` en vez de `localhost`, ya que el contenedor no comparte la red del host.
+
+### Decisiones tomadas — TP2 (Dockerfile del frontend)
+
+- Se usó también build multi-stage: una etapa con `node:20-alpine` que corre `npm ci` y `npm run build` (genera la carpeta `dist/` con los archivos estáticos de React), y una etapa final basada en `nginx:alpine` que solo contiene esos archivos ya compilados. El contenedor final no tiene Node instalado, porque una vez compilado el frontend no hace falta: solo hay que servir archivos estáticos.
+- En `nginx.conf`, el `location /` usa `try_files $uri $uri/ /index.html` para que las rutas de React Router (como `/resumen`) devuelvan `index.html` en vez de un 404, ya que esas rutas no son archivos reales del lado del servidor.
+- El proxy hacia el backend (`location /api/`) usa una variable (`set $backend_api ...`) en vez de escribir el nombre `backend` directo en el `proxy_pass`. Así nginx resuelve ese nombre recién cuando llega un pedido real, y no al arrancar — lo que le permite al contenedor del frontend levantar solo (como se probó en esta fase) sin depender de que el backend ya exista.
+- Se probó el contenedor del frontend de forma aislada (sin Compose) para confirmar que nginx sirve bien la aplicación React. Como es esperable, el listado de gastos no cargó porque el nombre `backend` todavía no resuelve a ningún contenedor real — eso se resuelve en la fase de Docker Compose.
 ## F4 — Frontend funcional
 
 ### Alcance
