@@ -1,4 +1,3 @@
-# Segunda corrida: verificar CACHED en el log (TP4 §3.2)
 name: CI
 
 on:
