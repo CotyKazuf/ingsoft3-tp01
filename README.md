@@ -71,3 +71,4 @@ docker compose -f docker-compose.registry.yml up -d
 
 - Frontend (interfaz web): http://localhost:8080
 - Backend (API, para pruebas directas con curl/Postman): http://localhost:3000
+
