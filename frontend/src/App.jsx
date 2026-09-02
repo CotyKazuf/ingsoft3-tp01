@@ -4,6 +4,8 @@ import Principal from './pages/Principal'
 import FormularioGastoPage from './pages/FormularioGastoPage'
 import ResumenAnual from './pages/ResumenAnual'
 import './App.css'
+// TODO: endpoint de salud
+import x from './no-existe'
 
 function App() {
   const [gastos, setGastos] = useState([])
