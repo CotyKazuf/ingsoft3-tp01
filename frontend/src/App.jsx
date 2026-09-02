@@ -5,6 +5,8 @@ import FormularioGastoPage from './pages/FormularioGastoPage'
 import ResumenAnual from './pages/ResumenAnual'
 import './App.css'
 
+
+
 function App() {
   const [gastos, setGastos] = useState([])
   const [gastoEditando, setGastoEditando] = useState(null)
