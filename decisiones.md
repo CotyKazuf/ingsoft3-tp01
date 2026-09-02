@@ -226,3 +226,61 @@ aplicarlo: se revisó el código generado, se probaron los casos manualmente en 
 (incluyendo forzar errores a propósito, como pedir eliminar un gasto inexistente para confirmar
 que el mensaje de error apareciera), y los commits y el Pull Request se hicieron y revisaron por
 cuenta propia.
+
+## TP4
+
+### Estructura elegida del pipeline
+
+El workflow (`.github/workflows/ci.yml`) tiene dos jobs, `build-backend` y `build-frontend`, uno por
+cada Dockerfile del TP2. No hay una razón artificial para tener dos: la app tiene efectivamente dos
+imágenes separadas (backend Express y frontend React/Vite servido por nginx), así que el pipeline
+construye exactamente eso, ni más ni menos. Corren en paralelo porque no tienen ninguna dependencia
+entre sí — GitHub Actions ejecuta todos los jobs de un workflow al mismo tiempo salvo que se declare
+`needs:`, y como construir el backend no depende de construir el frontend (ni viceversa), no había
+motivo para forzar una secuencia y hacer esperar un build al otro. El trigger es `pull_request` y
+`push` sobre `main`, para que corra tanto en cada PR (antes de mergear) como en cada push directo a
+`main`.
+
+### Cache
+
+Se cachean las capas intermedias de la construcción de cada imagen Docker (por ejemplo, la capa de
+`npm ci`, la más pesada y la que menos cambia entre builds). El cache vive en el almacenamiento propio
+de GitHub Actions (`type=gha`), no en el disco del runner ni en Docker local — por eso hace falta
+`docker/setup-buildx-action`, porque el driver de Docker por defecto no soporta exportar cache. Cada
+job usa un `scope` distinto (`backend`/`frontend`) para que no se pisen el cache entre sí. Si el cache
+desaparece (GitHub lo puede evictar en cualquier momento, tiene límites de tamaño y política propia de
+expiración), el pipeline no se rompe: simplemente vuelve a construir todas las capas desde cero, más
+lento, pero funciona igual. Que el pipeline dependiera de que el cache exista sería un bug — el cache
+es una optimización de velocidad, no un requisito de funcionamiento.
+
+### Por qué construye con el Dockerfile en vez de compilar por su cuenta
+
+El pipeline no reimplementa la lógica de build con comandos en el YAML (no hace
+`npm install && npm run build` directamente en un step) — usa `docker/build-push-action` apuntando a
+los Dockerfiles reales del TP2 (`./backend`, `./frontend`). La razón es evitar tener dos definiciones
+de "cómo se construye la app" que puedan divergir con el tiempo: si el día de mañana cambio el
+Dockerfile, el pipeline automáticamente construye con esa versión nueva, porque usa el mismo archivo
+que se usa para desplegar. Si la lógica estuviera duplicada en el workflow, cada cambio en el
+Dockerfile obligaría a acordarse de actualizar también el YAML, y tarde o temprano se
+desincronizarían.
+
+### Problemas encontrados y cómo se resolvieron
+
+Docker Desktop no estaba corriendo al intentar reproducir localmente la rotura intencional del build
+— el error fue de conexión al motor de Docker, no del build en sí; se resolvió abriendo Docker Desktop
+y esperando a que arrancara. Al preparar el segundo PR de la demostración de "Update branch", el
+comando `git commit -am` se llevó de arrastre cambios sin commitear que había en la carpeta de trabajo
+y que no correspondían a ese cambio, generando un conflicto real contra `main`; se resolvió cerrando
+ese PR sin mergear, borrando la rama, y rehaciendo el commit con `git add <archivo>` puntual en vez de
+`-am`. La primera corrida de cache no mostró `CACHED` en el log — no fue un error sino lo esperado,
+porque `main` todavía no tenía ninguna corrida previa configurada para reutilizar; se confirmó el
+funcionamiento con una segunda corrida sobre el mismo PR.
+
+### Uso de inteligencia artificial
+
+Utilicé Claude (Anthropic) como apoyo para entender los conceptos de integración continua de este TP
+(workflow, job, step, runner, trigger, cache de capas, gate de PR) y para escribir y ajustar el
+`ci.yml` de forma incremental (workflow básico primero, cache después, gate al final), siguiendo el
+orden que indica la guía. Cada cambio se explicó antes de aplicarlo, y se verificó con corridas reales
+en GitHub Actions: los checks en verde y en rojo, el cache con `CACHED` en el log, el botón de merge
+bloqueado y habilitado, y el botón "Update branch" se comprobaron mirando la interfaz real de GitHub.
