@@ -133,6 +133,39 @@ tarjeta quede esperando algo (por ejemplo, una revisión) y necesite avanzar en 
 quedarme frenada — pero sin subir tanto el número que el límite deje de cumplir su función,
 que es forzar a terminar antes de empezar algo nuevo.
 
+### Diagnóstico de la historia mal escrita
+
+La historia de ejemplo "Como desarrollador quiero crear la tabla usuarios para guardar los
+datos" está mal escrita porque es una tarea técnica disfrazada de historia: nadie "quiere"
+una tabla, no tiene beneficio real para un usuario. La reescribiría como "Como usuario quiero
+registrarme con usuario y contraseña para poder acceder a mis datos personales" — ahí la tabla
+de usuarios pasa a ser una tarea necesaria para cumplir esa historia, no la historia en sí.
+
+### Problemas y cómo se resolvieron (TP3)
+
+El problema no fue técnico sino de familiaridad con la herramienta: hasta este TP solo había
+usado GitHub para lo básico (pushear y clonar repositorios), así que ubicar las funciones
+nuevas — dónde crear un label, cómo vincular un sub-issue, dónde estaba el campo Iteration o
+el límite de WIP, dónde ver los Workflows del Project — me costó al principio, simplemente
+por no conocer la interfaz de Issues y Projects. Se resolvió yendo paso a paso, verificando
+con una captura cada configuración antes de pasar a la siguiente, en vez de asumir que algo
+había quedado bien.
+
+### Uso de inteligencia artificial (TP3)
+
+Utilicé Claude (Anthropic) como apoyo para entender los conceptos de gestión ágil de este TP
+(épica, historia, tarea, bug, criterios de aceptación, INVEST, WIP limit) y para redactar el
+contenido de los issues (títulos, cuerpos, criterios de aceptación) y el esqueleto del workflow
+de CI, siguiendo lo que pide la consigna oficial.
+
+Cómo verifiqué lo que generó: no di por buena ninguna configuración sin comprobarla yo misma
+en GitHub. Cada issue, cada vínculo de sub-issue, el límite de WIP, la asignación al sprint y
+la automatización se verificaron con capturas reales de mi propio repositorio antes de darlos
+por hechos — no confié en que "debería haber quedado bien". La trazabilidad (PR #22 con
+`Closes #18`) se verificó de punta a punta: confirmé que la tarea #18 quedó cerrada, que se
+movió sola a Done, que quedó enlazada al PR que la cerró, y que la historia #17 no se cerró
+por error junto con ella.
+
 ## F4 — Frontend funcional
 
 ### Alcance
