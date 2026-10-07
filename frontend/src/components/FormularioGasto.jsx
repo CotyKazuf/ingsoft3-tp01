@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CATEGORIAS, MEDIOS_PAGO, TIPOS_TARJETA } from '../lib/constantes'
 import { construirDatosGasto } from '../lib/gastos'
-import { mensajeDeError } from '../lib/api'
+import { guardarGastoEnApi } from '../lib/api'
 
 const hoyISO = () => new Date().toLocaleDateString('sv-SE') // formato YYYY-MM-DD en horario local
 const primerDiaDelAnio = () => `${new Date().getFullYear()}-01-01`
@@ -44,23 +44,7 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
 
         const datosGasto = construirDatosGasto({ descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo })
 
-        const esEdicion = Boolean(gastoEditando)
-        const url = esEdicion ? `/api/gastos/${gastoEditando.id}` : '/api/gastos'
-        const metodo = esEdicion ? 'PUT' : 'POST'
-
-        fetch(url, {
-            method: metodo,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datosGasto),
-        })
-            .then((res) =>
-                res.json().then((data) => {
-                    if (!res.ok) {
-                        throw new Error(mensajeDeError(data, 'No se pudo guardar el gasto'))
-                    }
-                    return data
-                })
-            )
+        guardarGastoEnApi(datosGasto, gastoEditando)
             .then(() => {
                 onGastoGuardado()
                 limpiarFormulario()
