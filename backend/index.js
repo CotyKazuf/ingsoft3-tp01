@@ -52,6 +52,87 @@ function validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, t
     return null;
 }
 
+// Operaciones sobre gastos. Reciben `db` (cualquier objeto con un metodo .query)
+// en lugar de usar el pool directamente: en produccion se les pasa el pool real
+// y en los tests un doble. Devuelven { status, body } con lo que hay que responder.
+async function crearGasto(db, datos) {
+    const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = datos;
+
+    const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo });
+    if (errorValidacion) {
+        return { status: 400, body: { error: errorValidacion } };
+    }
+
+    try {
+        const result = await db.query(
+            `INSERT INTO gastos (descripcion, monto, categoria, fecha, medio_pago, tarjeta, tipo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+            [descripcion, monto, categoria, fecha, medioPago, tarjeta || null, tipo || null]
+        );
+        return { status: 201, body: result.rows[0] };
+    } catch (err) {
+        console.error(err);
+        return { status: 500, body: { error: 'Error al crear el gasto' } };
+    }
+}
+
+async function actualizarGasto(db, id, datos) {
+    try {
+        const existente = await db.query('SELECT * FROM gastos WHERE id = $1', [id]);
+        if (existente.rows.length === 0) {
+            return { status: 404, body: { error: 'Gasto no encontrado' } };
+        }
+        const actual = existente.rows[0];
+        const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = datos;
+
+        const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo }, { parcial: true });
+        if (errorValidacion) {
+            return { status: 400, body: { error: errorValidacion } };
+        }
+
+        const result = await db.query(
+            `UPDATE gastos SET descripcion = $1, monto = $2, categoria = $3, fecha = $4,
+       medio_pago = $5, tarjeta = $6, tipo = $7 WHERE id = $8 RETURNING *`,
+            [
+                descripcion ?? actual.descripcion,
+                monto ?? actual.monto,
+                categoria ?? actual.categoria,
+                fecha ?? actual.fecha,
+                medioPago ?? actual.medio_pago,
+                tarjeta !== undefined ? tarjeta : actual.tarjeta,
+                tipo !== undefined ? tipo : actual.tipo,
+                id,
+            ]
+        );
+        return { status: 200, body: result.rows[0] };
+    } catch (err) {
+        console.error(err);
+        return { status: 500, body: { error: 'Error al actualizar el gasto' } };
+    }
+}
+
+async function eliminarGasto(db, id) {
+    try {
+        const result = await db.query('DELETE FROM gastos WHERE id = $1', [id]);
+        if (result.rowCount === 0) {
+            return { status: 404, body: { error: 'Gasto no encontrado' } };
+        }
+        return { status: 204 };
+    } catch (err) {
+        console.error(err);
+        return { status: 500, body: { error: 'Error al eliminar el gasto' } };
+    }
+}
+
+// Manda al cliente lo que devolvio una de las operaciones de arriba.
+function responder(res, { status, body }) {
+    if (body === undefined) {
+        return res.status(status).send();
+    }
+    return res.status(status).json(body);
+}
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
@@ -70,75 +151,15 @@ app.get('/api/gastos', async (req, res) => {
 });
 
 app.post('/api/gastos', async (req, res) => {
-    const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = req.body;
-
-    const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo });
-    if (errorValidacion) {
-        return res.status(400).json({ error: errorValidacion });
-    }
-
-    try {
-        const result = await pool.query(
-            `INSERT INTO gastos (descripcion, monto, categoria, fecha, medio_pago, tarjeta, tipo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-            [descripcion, monto, categoria, fecha, medioPago, tarjeta || null, tipo || null]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error al crear el gasto' });
-    }
+    responder(res, await crearGasto(pool, req.body));
 });
 
 app.put('/api/gastos/:id', async (req, res) => {
-    const id = Number(req.params.id);
-    try {
-        const existente = await pool.query('SELECT * FROM gastos WHERE id = $1', [id]);
-        if (existente.rows.length === 0) {
-            return res.status(404).json({ error: 'Gasto no encontrado' });
-        }
-        const actual = existente.rows[0];
-        const { descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo } = req.body;
-
-        const errorValidacion = validarCamposGasto({ descripcion, monto, categoria, fecha, medioPago, tipo }, { parcial: true });
-        if (errorValidacion) {
-            return res.status(400).json({ error: errorValidacion });
-        }
-
-        const result = await pool.query(
-            `UPDATE gastos SET descripcion = $1, monto = $2, categoria = $3, fecha = $4,
-       medio_pago = $5, tarjeta = $6, tipo = $7 WHERE id = $8 RETURNING *`,
-            [
-                descripcion ?? actual.descripcion,
-                monto ?? actual.monto,
-                categoria ?? actual.categoria,
-                fecha ?? actual.fecha,
-                medioPago ?? actual.medio_pago,
-                tarjeta !== undefined ? tarjeta : actual.tarjeta,
-                tipo !== undefined ? tipo : actual.tipo,
-                id,
-            ]
-        );
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error al actualizar el gasto' });
-    }
+    responder(res, await actualizarGasto(pool, Number(req.params.id), req.body));
 });
 
 app.delete('/api/gastos/:id', async (req, res) => {
-    const id = Number(req.params.id);
-    try {
-        const result = await pool.query('DELETE FROM gastos WHERE id = $1', [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Gasto no encontrado' });
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Error al eliminar el gasto' });
-    }
+    responder(res, await eliminarGasto(pool, Number(req.params.id)));
 });
 
 // Solo se abre el puerto si el archivo se ejecuta directamente (node index.js).
@@ -149,4 +170,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { app, validarCamposGasto };
+module.exports = { app, validarCamposGasto, crearGasto, actualizarGasto, eliminarGasto };
