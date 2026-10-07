@@ -141,6 +141,12 @@ app.delete('/api/gastos/:id', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Backend escuchando en el puerto ${PORT}`);
-});
+// Solo se abre el puerto si el archivo se ejecuta directamente (node index.js).
+// Si otro archivo lo importa (por ejemplo un test), no se levanta ningun servidor.
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Backend escuchando en el puerto ${PORT}`);
+    });
+}
+
+module.exports = { app, validarCamposGasto };
