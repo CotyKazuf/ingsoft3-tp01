@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Principal from './pages/Principal'
 import FormularioGastoPage from './pages/FormularioGastoPage'
 import ResumenAnual from './pages/ResumenAnual'
+import { mensajeDeError } from './lib/api'
 import './App.css'
 
 
@@ -28,7 +29,7 @@ function App() {
           return
         }
         return res.json().then((data) => {
-          throw new Error(data.error || 'No se pudo eliminar el gasto')
+          throw new Error(mensajeDeError(data, 'No se pudo eliminar el gasto'))
         })
       })
       .catch((err) => {

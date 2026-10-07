@@ -1,16 +1,11 @@
 import { useNavigate } from 'react-router-dom'
-import { MESES } from '../components/FormularioGasto'
+import { totalesPorMes } from '../lib/gastos'
 
 function ResumenAnual({ gastos }) {
     const navigate = useNavigate()
     const anioActual = new Date().getFullYear()
 
-    const totalesPorMes = MESES.map(({ valor, nombre }) => {
-        const total = gastos
-            .filter((g) => g.fecha.slice(0, 4) === String(anioActual) && g.fecha.slice(5, 7) === valor)
-            .reduce((acumulado, g) => acumulado + Number(g.monto), 0)
-        return { nombre, total }
-    })
+    const totalesMensuales = totalesPorMes(gastos, anioActual)
 
     return (
         <div>
@@ -20,7 +15,7 @@ function ResumenAnual({ gastos }) {
             </header>
 
             <div className="grid-meses">
-                {totalesPorMes.map((item) => (
+                {totalesMensuales.map((item) => (
                     <div key={item.nombre} className="tarjeta-mes">
                         <small>{item.nombre}</small>
                         <div className="monto">${item.total}</div>
