@@ -464,9 +464,10 @@ branches**, y el check en verde (CI #23). Hice el Squash and merge a `main` (com
 El segundo PR (rama `tp5-segundo-pr-rojo`, commit `f0e0cd0`) agrega, sin tests, la función
 `porcentajesPorCategoria` al final de `frontend/src/lib/gastos.js` (qué porcentaje del gasto total representa
 cada categoría). Es un cambio distinto del primero: ahora en el frontend, así que el que falla es
-`build-frontend` y el backend queda en verde. En la prueba local dio 85.71 % de líneas y 92.3 % de branches contra
-el 95 % exigido; el check de GitHub quedó en rojo y el merge, deshabilitado.
-[CONFIRMAR CON EL LOG DEL JOB DEL PR #33: porcentajes de líneas y branches de la corrida]
+`build-frontend` y el backend queda en verde. Los 26 tests existentes pasan; falla solo el coverage: en el log del job rojo
+el total da **85.71 % de líneas y 92.3 % de branches contra el 95 % exigido** (`gastos.js` baja a 73.91 % de
+líneas, con las líneas 64-73 sin cubrir, que son la función nueva) y el job termina con `exit code 1`. El merge
+quedó deshabilitado. Los mismos números los había medido antes en local.
 **Este PR queda abierto y en rojo hasta la defensa: no se mergea ni se arregla.**
 
 ### Enlaces de evidencia
@@ -477,10 +478,11 @@ el 95 % exigido; el check de GitHub quedó en rojo y el merge, deshabilitado.
 - Merge del primer PR en `main`: https://github.com/CotyKazuf/ingsoft3-tp01/commit/6d3c1b6
 - Segundo PR (abierto y en rojo): https://github.com/CotyKazuf/ingsoft3-tp01/pull/33
 - Commit del segundo PR: https://github.com/CotyKazuf/ingsoft3-tp01/commit/f0e0cd0
-- [PENDIENTE: URL CORRIDA COVERAGE EN ROJO DEL PRIMER PR (commit c601377)]
-- [PENDIENTE: URL CORRIDA COVERAGE EN VERDE DEL PRIMER PR (CI #23)]
-- [PENDIENTE: URL CORRIDA EN ROJO DEL SEGUNDO PR (commit f0e0cd0)]
-- [PENDIENTE: URL DEL REPORTE DE COVERAGE DESCARGABLE (artifact `coverage-backend` o `coverage-frontend` de una de las corridas)]
+- Corrida en rojo por coverage del primer PR (CI #22, commit `c601377`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38079517844
+- Corrida en verde del primer PR, ya con los tests (CI #23, commit `795830f`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38081710225
+- Corrida en `main` después del merge del primer PR (CI #24, verde): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38082572682
+- Corrida en rojo del segundo PR (commit `f0e0cd0`, job `build-frontend`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38083243623/job/114304319427?pr=33
+- Reporte de coverage descargable: en la sección Artifacts de la corrida en verde (CI #23) están `coverage-backend` y `coverage-frontend` (HTML navegable, `lcov` y `coverage-summary.json`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38081710225
 
 ### Problemas encontrados y cómo se resolvieron (TP5)
 
