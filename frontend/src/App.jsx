@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Principal from './pages/Principal'
 import FormularioGastoPage from './pages/FormularioGastoPage'
 import ResumenAnual from './pages/ResumenAnual'
+import { eliminarGastoEnApi } from './lib/api'
 import './App.css'
 
 
@@ -21,16 +22,8 @@ function App() {
   }
 
   const eliminarGasto = (id) => {
-    fetch(`/api/gastos/${id}`, { method: 'DELETE' })
-      .then((res) => {
-        if (res.ok) {
-          cargarGastos()
-          return
-        }
-        return res.json().then((data) => {
-          throw new Error(data.error || 'No se pudo eliminar el gasto')
-        })
-      })
+    eliminarGastoEnApi(id)
+      .then(() => cargarGastos())
       .catch((err) => {
         console.error('Error al eliminar gasto:', err)
         alert(err.message)

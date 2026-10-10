@@ -21,6 +21,62 @@ jobs:
       - name: Preparar el constructor que sabe cachear
         uses: docker/setup-buildx-action@v4
 
+      # --- Tests y coverage (TP5) ---
+      # La receta vive en el Dockerfile (etapa "test"); acá solo se la invoca.
+      - name: Construir la imagen de tests del backend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          target: test
+          load: true
+          push: false
+          tags: backend:test
+          cache-from: type=gha,scope=backend-test
+          cache-to: type=gha,mode=max,scope=backend-test
+
+      # Si los tests fallan o el coverage no llega al umbral, el comando del contenedor
+      # termina con error y ESTE paso falla: el job queda rojo y el merge bloqueado.
+      - name: Ejecutar tests y coverage del backend
+        id: tests
+        run: docker run --name backend-tests backend:test
+
+      # Los tres pasos siguientes corren aunque los tests hayan fallado (if: always()),
+      # para poder diagnosticar. No cambian el resultado: el job ya quedó en rojo por el paso anterior.
+      - name: Sacar el reporte de coverage del contenedor
+        if: always() && steps.tests.outcome != 'skipped'
+        run: |
+          mkdir -p reports
+          docker cp backend-tests:/app/coverage reports/backend
+
+      - name: Resumen de coverage del backend
+        if: always() && steps.tests.outcome != 'skipped'
+        run: |
+          {
+            echo "### Coverage del backend"
+            echo ""
+            echo "Resultado de los tests y del umbral: **${{ steps.tests.outcome }}**"
+            echo ""
+            if [ -f reports/backend/coverage-summary.json ]; then
+              echo "| Métrica | Cobertura | Cubiertas / Totales |"
+              echo "|---|---|---|"
+              jq -r '.total | "| Líneas | \(.lines.pct)% | \(.lines.covered) / \(.lines.total) |", "| Ramas | \(.branches.pct)% | \(.branches.covered) / \(.branches.total) |", "| Funciones | \(.functions.pct)% | \(.functions.covered) / \(.functions.total) |"' reports/backend/coverage-summary.json
+              echo ""
+              echo "El umbral exigido está en backend/vitest.config.mjs. El reporte navegable se descarga del artifact **coverage-backend**."
+            else
+              echo "No se generó el reporte de coverage."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar el reporte de coverage del backend (artifact)
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-backend
+          path: reports/backend
+          retention-days: 30
+          if-no-files-found: warn
+
+      # --- Build de la imagen real (igual que en el TP4) ---
       - name: Construir la imagen del backend
         uses: docker/build-push-action@v7
         with:
@@ -44,6 +100,62 @@ jobs:
       - name: Preparar el constructor que sabe cachear
         uses: docker/setup-buildx-action@v4
 
+      # --- Tests y coverage (TP5) ---
+      # La receta vive en el Dockerfile (etapa "test"); acá solo se la invoca.
+      - name: Construir la imagen de tests del frontend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          target: test
+          load: true
+          push: false
+          tags: frontend:test
+          cache-from: type=gha,scope=frontend-test
+          cache-to: type=gha,mode=max,scope=frontend-test
+
+      # Si los tests fallan o el coverage no llega al umbral, el comando del contenedor
+      # termina con error y ESTE paso falla: el job queda rojo y el merge bloqueado.
+      - name: Ejecutar tests y coverage del frontend
+        id: tests
+        run: docker run --name frontend-tests frontend:test
+
+      # Los tres pasos siguientes corren aunque los tests hayan fallado (if: always()),
+      # para poder diagnosticar. No cambian el resultado: el job ya quedó en rojo por el paso anterior.
+      - name: Sacar el reporte de coverage del contenedor
+        if: always() && steps.tests.outcome != 'skipped'
+        run: |
+          mkdir -p reports
+          docker cp frontend-tests:/app/coverage reports/frontend
+
+      - name: Resumen de coverage del frontend
+        if: always() && steps.tests.outcome != 'skipped'
+        run: |
+          {
+            echo "### Coverage del frontend"
+            echo ""
+            echo "Resultado de los tests y del umbral: **${{ steps.tests.outcome }}**"
+            echo ""
+            if [ -f reports/frontend/coverage-summary.json ]; then
+              echo "| Métrica | Cobertura | Cubiertas / Totales |"
+              echo "|---|---|---|"
+              jq -r '.total | "| Líneas | \(.lines.pct)% | \(.lines.covered) / \(.lines.total) |", "| Ramas | \(.branches.pct)% | \(.branches.covered) / \(.branches.total) |", "| Funciones | \(.functions.pct)% | \(.functions.covered) / \(.functions.total) |"' reports/frontend/coverage-summary.json
+              echo ""
+              echo "El umbral exigido está en frontend/vitest.config.js. El reporte navegable se descarga del artifact **coverage-frontend**."
+            else
+              echo "No se generó el reporte de coverage."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar el reporte de coverage del frontend (artifact)
+        if: always() && steps.tests.outcome != 'skipped'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-frontend
+          path: reports/frontend
+          retention-days: 30
+          if-no-files-found: warn
+
+      # --- Build de la imagen real (igual que en el TP4) ---
       - name: Construir la imagen del frontend
         uses: docker/build-push-action@v7
         with:

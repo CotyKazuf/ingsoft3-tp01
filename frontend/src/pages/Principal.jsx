@@ -1,24 +1,16 @@
 import { useNavigate } from 'react-router-dom'
-import { CATEGORIAS, CATEGORIA_SLUG, MESES } from '../components/FormularioGasto'
+import { CATEGORIAS, CATEGORIA_SLUG, MESES } from '../lib/constantes'
+import { calcularTotal, totalesPorCategoria, filtrarGastos, formatearFecha } from '../lib/gastos'
 
 function Principal({ gastos, categoriaFiltro, setCategoriaFiltro, mesFiltro, setMesFiltro, setGastoEditando, eliminarGasto }) {
     const navigate = useNavigate()
     const anioActual = new Date().getFullYear()
 
-    const total = gastos.reduce((acumulado, g) => acumulado + Number(g.monto), 0)
+    const total = calcularTotal(gastos)
 
-    const totalPorCategoria = CATEGORIAS.map((cat) => ({
-        categoria: cat,
-        total: gastos
-            .filter((g) => g.categoria === cat)
-            .reduce((acumulado, g) => acumulado + Number(g.monto), 0),
-    })).filter((item) => item.total > 0)
+    const totalPorCategoria = totalesPorCategoria(gastos)
 
-    const gastosFiltrados = gastos.filter((g) => {
-        const coincideCategoria = !categoriaFiltro || g.categoria === categoriaFiltro
-        const coincideMes = !mesFiltro || g.fecha.slice(5, 7) === mesFiltro
-        return coincideCategoria && coincideMes
-    })
+    const gastosFiltrados = filtrarGastos(gastos, { categoria: categoriaFiltro, mes: mesFiltro })
 
     const irAAgregar = () => {
         setGastoEditando(null)
@@ -28,11 +20,6 @@ function Principal({ gastos, categoriaFiltro, setCategoriaFiltro, mesFiltro, set
     const irAEditar = (gasto) => {
         setGastoEditando(gasto)
         navigate('/agregar')
-    }
-
-    const formatearFecha = (fecha) => {
-        const [anio, mes, dia] = fecha.split('-')
-        return `${dia}/${mes}/${anio}`
     }
 
     return (

@@ -1,33 +1,7 @@
 import { useState, useEffect } from 'react'
-
-export const CATEGORIAS = ['Comida', 'Transporte', 'Vivienda', 'Entretenimiento', 'Salud', 'Otros']
-
-export const CATEGORIA_SLUG = {
-    Comida: 'comida',
-    Transporte: 'transporte',
-    Vivienda: 'vivienda',
-    Entretenimiento: 'entretenimiento',
-    Salud: 'salud',
-    Otros: 'otros',
-}
-
-const MEDIOS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta']
-const TIPOS_TARJETA = ['Débito', 'Crédito']
-
-export const MESES = [
-    { valor: '01', nombre: 'Enero' },
-    { valor: '02', nombre: 'Febrero' },
-    { valor: '03', nombre: 'Marzo' },
-    { valor: '04', nombre: 'Abril' },
-    { valor: '05', nombre: 'Mayo' },
-    { valor: '06', nombre: 'Junio' },
-    { valor: '07', nombre: 'Julio' },
-    { valor: '08', nombre: 'Agosto' },
-    { valor: '09', nombre: 'Septiembre' },
-    { valor: '10', nombre: 'Octubre' },
-    { valor: '11', nombre: 'Noviembre' },
-    { valor: '12', nombre: 'Diciembre' },
-]
+import { CATEGORIAS, MEDIOS_PAGO, TIPOS_TARJETA } from '../lib/constantes'
+import { construirDatosGasto } from '../lib/gastos'
+import { guardarGastoEnApi } from '../lib/api'
 
 const hoyISO = () => new Date().toLocaleDateString('sv-SE') // formato YYYY-MM-DD en horario local
 const primerDiaDelAnio = () => `${new Date().getFullYear()}-01-01`
@@ -68,33 +42,9 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
         e.preventDefault()
         setError('')
 
-        const datosGasto = {
-            descripcion,
-            monto: Number(monto),
-            categoria,
-            fecha,
-            medioPago,
-            tarjeta: medioPago === 'Tarjeta' ? tarjeta : null,
-            tipo: medioPago === 'Tarjeta' ? tipo : null,
-        }
+        const datosGasto = construirDatosGasto({ descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo })
 
-        const esEdicion = Boolean(gastoEditando)
-        const url = esEdicion ? `/api/gastos/${gastoEditando.id}` : '/api/gastos'
-        const metodo = esEdicion ? 'PUT' : 'POST'
-
-        fetch(url, {
-            method: metodo,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datosGasto),
-        })
-            .then((res) =>
-                res.json().then((data) => {
-                    if (!res.ok) {
-                        throw new Error(data.error || 'No se pudo guardar el gasto')
-                    }
-                    return data
-                })
-            )
+        guardarGastoEnApi(datosGasto, gastoEditando)
             .then(() => {
                 onGastoGuardado()
                 limpiarFormulario()
