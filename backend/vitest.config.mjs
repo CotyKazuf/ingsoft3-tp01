@@ -23,6 +23,10 @@ export default defineConfig({
       // lcov = formato estandar de herramientas; json-summary = totales faciles de leer por un script
       reporter: ['text', 'html', 'lcov', 'json-summary'],
       reportsDirectory: 'coverage',
+      // Genera el reporte tambien cuando un TEST falla (por defecto no lo hace). Sirve para
+      // diagnosticar desde el artifact del pipeline. No cambia el resultado: el comando sigue
+      // terminando con error si un test falla o si no se llega al umbral.
+      reportOnFailure: true,
       // UMBRAL (el "quality gate"): si el porcentaje GLOBAL queda por debajo de alguno de estos
       // numeros, vitest termina con error (exit code 1) y el job del pipeline se pone rojo.
       // Medicion de partida: lineas 75.6 %, ramas 87.83 %. Se eligio ~5 puntos por debajo:
