@@ -284,3 +284,249 @@ Utilicé Claude (Anthropic) como apoyo para entender los conceptos de integraci�
 orden que indica la guía. Cada cambio se explicó antes de aplicarlo, y se verificó con corridas reales
 en GitHub Actions: los checks en verde y en rojo, el cache con `CACHED` en el log, el botón de merge
 bloqueado y habilitado, y el botón "Update branch" se comprobaron mirando la interfaz real de GitHub.
+
+## TP5
+
+### Herramienta elegida
+
+Usé Vitest (con `@vitest/coverage-v8`) tanto en el backend como en el frontend, en vez de Jest en un lado y
+otra cosa en el otro. La razón es práctica: es un solo runner y una sola forma de configurar tests y coverage
+(`vitest.config.mjs` en el backend y `vitest.config.js` en el frontend), y el frontend ya usaba Vite, y Vitest
+usa ese mismo motor. Elegí la versión 4.1.11 y no la 5 porque la 5 exige Node 22.12 o
+más y los Dockerfiles de los TP anteriores usan `node:20`; cambiar la versión de Node de las imágenes no tenía
+nada que ver con este TP. Los scripts son `npm test` (`vitest run`) y `npm run test:coverage`
+(`vitest run --coverage`). El provider de coverage es v8, que mide lo que Node ejecuta realmente y no necesita
+instrumentar el código.
+
+### Qué lógica elegí testear y por qué
+
+Elegí la lógica que tiene reglas de negocio y que se puede probar sin levantar nada: en el backend, las
+**reglas de validación de un gasto** (`validarCamposGasto`) y las **operaciones de crear, actualizar y eliminar**
+(`crearGasto`, `actualizarGasto`, `eliminarGasto`), que deciden qué status y qué cuerpo se responde; en el
+frontend, la **lógica pura de `src/lib/`** (totales, filtros por categoría y mes, totales por categoría y por
+mes, armado del cuerpo del POST/PUT, formato de fecha) y el **cliente de la API** (`guardarGastoEnApi`,
+`eliminarGastoEnApi`). Dejé afuera lo que es pantalla (componentes React) y lo que es conexión real a PostgreSQL,
+porque probarlo bien exige navegador y base de datos reales, y eso corresponde a las pruebas de integración y e2e
+del TP7.
+
+### Refactors para testabilidad
+
+El código original mezclaba la lógica con Express, con el pool de PostgreSQL y con React, y así no se podía probar
+una regla sin levantar todo. Hice refactors mínimos, sin cambiar el comportamiento:
+
+- **Backend:** `validarCamposGasto` se exporta de `index.js`. `crearGasto(db, datos)`,
+  `actualizarGasto(db, id, datos)` y `eliminarGasto(db, id)` reciben la base como parámetro (`db`, cualquier
+  objeto con un método `.query`) y devuelven `{ status, body }`; las rutas de Express solo llaman a esas
+  funciones con el pool real y mandan la respuesta. `app.listen` quedó dentro de `if (require.main === module)`
+  para que importar `index.js` desde un test no abra un puerto.
+- **Frontend:** saqué la lógica de los componentes a `src/lib/constantes.js`, `src/lib/gastos.js` y
+  `src/lib/api.js`, y los componentes (`Principal`, `ResumenAnual`, `FormularioGasto`, `App`) ahora usan esas
+  funciones. `guardarGastoEnApi` y `eliminarGastoEnApi` reciben `fetchFn` (por defecto el `fetch` real).
+
+La app sigue usando el pool y el `fetch` reales, y las rutas siguen siendo `/api/...` relativas. Se comprobó que
+el comportamiento no cambió (ver "Cómo verifiqué lo que produjo la IA").
+
+### Suite del backend
+
+Son 33 métodos de test, 56 casos en total, en tres archivos. `tests/validaciones.test.js` (14 métodos) cubre
+seis reglas distintas de `validarCamposGasto`: el monto debe ser un número mayor a 0, la descripción es
+obligatoria, la fecha debe ser válida, no futura y del año actual, la categoría y el medio de pago deben estar en
+las listas permitidas, el tipo de tarjeta es opcional pero si viene debe ser Débito o Crédito, y la
+actualización (PUT) es parcial. `tests/gastos.test.js` (7 métodos) prueba `crearGasto`, `actualizarGasto` y
+`eliminarGasto` con la base mockeada. `tests/resumen.test.js` (12 métodos) prueba `resumirGastos` y salió del
+primer PR (ver más abajo). Los tests siguen el patrón Arrange-Act-Assert y fijan la fecha de "hoy" con
+`vi.setSystemTime` para que den lo mismo cualquier día y en cualquier zona horaria.
+
+### Suite del frontend
+
+Son 15 métodos de test, 26 casos, sin DOM (entorno `node`, sin jsdom): `src/lib/gastos.test.js` (9 métodos)
+prueba `calcularTotal`, `filtrarGastos`, `totalesPorCategoria`, `totalesPorMes`, `formatearFecha` y
+`construirDatosGasto`; `src/lib/api.test.js` (6 métodos) prueba `mensajeDeError`, `guardarGastoEnApi` y
+`eliminarGastoEnApi`.
+
+### Parametrizados, casos de error y mocks
+
+**Parametrizados (`it.each`).** Backend: 7 (por ejemplo, los montos inválidos `0`, negativo, texto y `null`
+contra la misma regla; los meses válidos e inválidos de `resumirGastos`). Frontend: 6 (por ejemplo, las
+combinaciones de filtro categoría/mes de `filtrarGastos` y los mensajes de error de `mensajeDeError`). Uso
+`it.each` cuando la misma regla se prueba con varias entradas; un caso por fila, con nombre propio en el reporte.
+
+**Casos de error y de borde.** Backend: gasto inválido responde 400 y no llega a tocar la base; si la base falla
+responde 500 con un mensaje genérico; actualizar o borrar un gasto que no existe responde 404; fecha igual a hoy
+sí, mañana no; monto 0.01 sí, 0 no. Frontend: si el backend responde con error, el cliente lanza una excepción con el
+mensaje del backend o con uno por defecto; si falla la red, el error de `fetch` se propaga; lista vacía devuelve total 0.
+
+**Mocks.** Backend: en `tests/gastos.test.js` la base es `db = { query: vi.fn() }`. No se mockea para que "pase":
+se comprueba la interacción, por ejemplo que el INSERT se ejecuta una sola vez y con los valores en el orden
+correcto, que con datos inválidos la base no se toca, y que el UPDATE conserva los valores actuales de los campos
+que no se enviaron. Frontend: en `src/lib/api.test.js` el cliente recibe `fetchFn = vi.fn()` y se comprueba a qué
+URL se llama, con qué método y con qué cuerpo. Es un mock y no un simple stub porque los tests verifican cómo se
+llamó, no solo qué devolvió. Lo que un mock no detecta es si el SQL o el endpoint real funcionan de verdad; eso
+lo cubrirá la integración del TP7.
+
+### Coverage: números
+
+| | Líneas | Branches | Umbral exigido |
+|---|---|---|---|
+| Backend al entrar en main (`index.js` + `resumen.js`) | 80.39 % | 90 % | 70 % líneas, 80 % branches |
+| Backend antes de `resumen.js` (solo `index.js`) | 75.6 % (62/82) | 87.83 % (65/74) | idem |
+| Frontend (`src/lib/`) | 100 % (36/36) | 100 % (24/24) | 95 % líneas, 95 % branches |
+
+Se mide **line coverage y branch coverage**, y los dos se exigen. Statements y funciones se muestran en el
+reporte pero no se exigen: el porcentaje de funciones del backend (41.66 %) es bajo porque la capa de rutas de
+Express no se prueba sin servidor, y exigirlo habría obligado a escribir tests de relleno.
+
+### Umbral elegido, métrica y justificación
+
+**Backend: 70 % de líneas y 80 % de branches.** Partí de lo medido (75.6 % y 87.83 %) y puse el umbral unos 5
+puntos por debajo, redondeado: lo suficientemente cerca para que se note cuando se agrega lógica sin tests, y con
+margen para que un cambio chico y razonable no rompa el pipeline. No usé un número arbitrario como 80 % para todo.
+Lo comprobé con pruebas controladas en una copia: una función nueva de 5 `if` sin tests ya hacía fallar el
+umbral (69.66 % de líneas, 77.38 % de branches), y borrar `validaciones.test.js` dejaba el backend en 67.07 % y
+77.02 %, también en rojo. Hay un techo: unas 15 de las 82 líneas de `index.js` son capa HTTP (rutas, `/health`,
+`listen`), que sin pruebas de integración no se ejecutan, así que no tiene sentido pedir más de lo que se puede
+probar con tests unitarios.
+
+**Frontend: 95 % de líneas y 95 % de branches.** Se mide solo `src/lib/`, que es lógica pura y está al 100 %.
+Exigir 100 % rompería el build por una sola rama defensiva (por ejemplo, un `??`), y un piso bajo como 80 % dejaría
+pasar funciones nuevas sin tests: con 95 %, una función nueva de 3 líneas con un `if` sin test ya hace fallar el
+job (94.73 % y 92.3 % en la prueba). Es más alto que el del backend porque acá solo se mide lo que se puede
+probar completo sin DOM.
+
+**Por qué branch además de líneas.** Una línea puede estar ejecutada y la rama contraria no: con solo líneas,
+un `if` sin su `else` probado pasa desapercibido.
+
+### Qué se excluye del coverage y por qué
+
+- **Backend:** `db.js` (crea el pool de `pg`; no tiene lógica y se prueba solo con una base real, en el TP7). El
+  `include` es `*.js` de la raíz del backend, así que no entran `tests/`, `node_modules/` ni `coverage/`.
+- **Frontend:** los componentes `.jsx` (`App`, `pages/`, `components/`), `main.jsx` (arranque) y los
+  `*.test.js` que viven junto al código. Son pantallas: probarlas exige navegador o DOM, y eso lo cubrirá el e2e
+  del TP7.
+
+Para que no parezca que inflé el número: si en el frontend se contaran también los `.jsx`, el coverage daría
+25.71 % de líneas y 63.15 % de branches. Elegí medir solo `src/lib/` porque es donde está toda la lógica no
+visual, y lo digo explícitamente en lugar de esconderlo.
+
+### Por qué un coverage alto no garantiza calidad
+
+El coverage mide qué líneas se ejecutaron, no si algún test verificó el resultado. Un ejemplo con `resumirGastos`
+de Mis Gastos: escribí en una copia un test sin ningún `expect`, que solo llamaba a la función con varios
+gastos. Ese test dio **100 % de líneas y 100 % de branches** sobre `resumen.js` y pasó en verde. Después rompí a
+propósito la función para que eligiera el gasto **menor** en vez del mayor (cambiar `>` por `<` en la comparación
+del gasto mayor): el test sin `expect` siguió pasando con 100 %, y en cambio los tests reales de `resumen.test.js`
+fallaron (2 tests en rojo). El umbral de coverage solo evita que quede código sin ejecutar; que los tests sirvan
+lo da la calidad de las aserciones.
+
+### Ejercicio de la rama o camino sin cubrir
+
+- **Línea y camino:** `backend/index.js`, función `actualizarGasto`, el `if (errorValidacion)` de la línea 90: la
+  línea 91 (`return { status: 400, ... }`) nunca se ejecuta en los tests. Es la rama "PUT con un dato inválido".
+- **Entrada que la recorrería:** `actualizarGasto(db, 7, { monto: -5 })` con una base que encuentra el gasto 7.
+  Lo probé en una copia y cubre la rama (líneas 75.6 % a 76.82 %, branches 87.83 % a 89.18 %).
+- **Decisión tomada:** por ahora **no la cubrí**. El camino es real (hay una validación de PUT que importa), pero
+  agregarlo antes de fijar el umbral movía la línea base, y el umbral se calculó sobre la medición sin ese test. Lo
+  dejo documentado como el primer test a agregar si más adelante se quiere subir el umbral del backend.
+
+### Pipeline y quality gate
+
+Los tests no se instalan ni se ejecutan con comandos sueltos en el YAML: ambos Dockerfiles tienen una etapa
+`test` (en el backend, entre `build` y `final`; en el frontend, que quedó con una etapa `deps` compartida por
+`test` y `build`) cuya instrucción por defecto es `npm run test:coverage`. El workflow (`ci.yml`) construye esa
+etapa con `target: test`, ejecuta `docker run --name <x>-tests`, saca el reporte con `docker cp`, escribe una
+tabla de coverage en el Summary de la corrida y sube el reporte como artifact (`coverage-backend` y
+`coverage-frontend`, descargables). Los pasos posteriores al `docker run` llevan `if: always()` para que el
+reporte y el artifact se generen **aunque falle el umbral**, sin esconder el fallo: no hay `continue-on-error`,
+ni `|| true`, ni `exit 0`. El quality gate son los mismos checks obligatorios del TP4 (`build-backend` y
+`build-frontend`): si vitest no llega al umbral termina con código 1, falla el paso, el job queda rojo y GitHub
+bloquea el merge. Si alguien bajara los umbrales, el gate se desactivaría; por eso cambiarlos debería pasar por
+un PR con motivo.
+
+### Primer PR: rojo por coverage, fix y merge (PR #32)
+
+Primero abrí el PR con la base verde (sin la lógica nueva) para comprobar que el pipeline nuevo funcionaba en
+GitHub: pasaron los dos checks (CI #21) y se pudo descargar el artifact. Después agregué en `backend/resumen.js`
+la función `resumirGastos(gastos, mes)` (cantidad, total, promedio, gasto mayor y categoría con más gasto, con
+filtro opcional por mes; 20 líneas y 16 ramas), sin tests y sin conectarla a ninguna ruta, para no agregar una
+funcionalidad nueva a la app: el commit `c601377` dejó `build-backend` **en rojo** y `build-frontend` en verde.
+Los 30 tests existentes pasaban; falló solo el coverage: **líneas 60.78 % contra el umbral de 70 % y branches
+72.22 % contra el 80 %** (las dos métricas quedaron por debajo), y `resumen.js` figuraba con 0 %. GitHub
+deshabilitó el botón de merge. Para arreglarlo el commit `795830f` agregó `backend/tests/resumen.test.js` (12
+métodos, 26 casos): el cálculo normal, la lista vacía, los montos que llegan como texto (porque PostgreSQL devuelve
+`NUMERIC` como texto), el redondeo a 2 decimales (`0.1 + 0.2`), los empates de monto y de categoría, el filtro
+por mes (con datos, de otro mes y sin gastos), los meses válidos en los bordes, y los datos inválidos
+(5 entradas que no son lista y 7 meses inválidos). Cada test corresponde a una rama o regla distinta de la
+función; no cambié umbrales ni exclusiones. El resultado fue 56 tests pasando, **80.39 % de líneas y 90 % de
+branches**, y el check en verde (CI #23). Hice el Squash and merge a `main` (commit `6d3c1b6`) y dejé la rama.
+
+### Segundo PR: abierto y en rojo (PR #33)
+
+El segundo PR (rama `tp5-segundo-pr-rojo`, commit `f0e0cd0`) agrega, sin tests, la función
+`porcentajesPorCategoria` al final de `frontend/src/lib/gastos.js` (qué porcentaje del gasto total representa
+cada categoría). Es un cambio distinto del primero: ahora en el frontend, así que el que falla es
+`build-frontend` y el backend queda en verde. Los 26 tests existentes pasan; falla solo el coverage: en el log del job rojo
+el total da **85.71 % de líneas y 92.3 % de branches contra el 95 % exigido** (`gastos.js` baja a 73.91 % de
+líneas, con las líneas 64-73 sin cubrir, que son la función nueva) y el job termina con `exit code 1`. El merge
+quedó deshabilitado. Los mismos números los había medido antes en local.
+**Este PR queda abierto y en rojo hasta la defensa: no se mergea ni se arregla.**
+
+### Enlaces de evidencia
+
+- Primer PR (con historia rojo, fix, verde y merge): https://github.com/CotyKazuf/ingsoft3-tp01/pull/32
+- Commit en rojo del primer PR: https://github.com/CotyKazuf/ingsoft3-tp01/commit/c601377
+- Commit que lo arregla (verde): https://github.com/CotyKazuf/ingsoft3-tp01/commit/795830f
+- Merge del primer PR en `main`: https://github.com/CotyKazuf/ingsoft3-tp01/commit/6d3c1b6
+- Segundo PR (abierto y en rojo): https://github.com/CotyKazuf/ingsoft3-tp01/pull/33
+- Commit del segundo PR: https://github.com/CotyKazuf/ingsoft3-tp01/commit/f0e0cd0
+- Corrida en rojo por coverage del primer PR (CI #22, commit `c601377`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38079517844
+- Corrida en verde del primer PR, ya con los tests (CI #23, commit `795830f`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38081710225
+- Corrida en `main` después del merge del primer PR (CI #24, verde): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38082572682
+- Corrida en rojo del segundo PR (commit `f0e0cd0`, job `build-frontend`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38083243623/job/114304319427?pr=33
+- Reporte de coverage descargable: en la sección Artifacts de la corrida en verde (CI #23) están `coverage-backend` y `coverage-frontend` (HTML navegable, `lcov` y `coverage-summary.json`): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38081710225
+
+### Problemas encontrados y cómo se resolvieron (TP5)
+
+- **Error de npm al instalar Vitest.** Con npm 10.9.8, `npm install vitest@4.1.x` fallaba con
+  `Cannot read properties of null (reading 'edgesOut')`. Se resolvió instalando con `--legacy-peer-deps` en una
+  copia de trabajo; el `package-lock.json` resultante funciona después con `npm ci` normal, que es lo que usan
+  los Dockerfiles (se comprobó con npm 10.8.2, el que trae `node:20`).
+- **El reporte de coverage no se generaba cuando fallaba un test.** Por defecto Vitest no escribe el reporte si
+  un test falla, y el artifact quedaba vacío justo cuando más hacía falta mirarlo. Se resolvió con
+  `reportOnFailure: true` en los dos `vitest.config`, y se comprobó rompiendo a propósito una aserción. No cambia
+  el resultado: el comando sigue terminando con error.
+- **El pipeline nuevo no se podía probar localmente.** No había Docker en el entorno donde se escribió el
+  workflow. Se validó el YAML, el orden de los pasos y el comportamiento del paso de tests con una simulación, y
+  la primera ejecución real fue en el PR. Por eso abrí el primer PR con la base verde antes de agregar la lógica
+  sin tests: así, el rojo posterior solo podía venir del coverage y no de un error del pipeline.
+- **`docker compose up` desde `backend/` usó otro `.env`.** Daba error de autenticación de PostgreSQL (`28P01`),
+  `GET /api/gastos` devolvía 500 y el frontend se quedaba en blanco. Se resolvió ejecutando siempre
+  `docker compose` desde la raíz del repo.
+- **Comandos de Git desde la carpeta equivocada.** Dos veces corrí `git add` con rutas de la raíz estando dentro
+  de `frontend/` y Git respondió que no encontraba los archivos; se resolvió ejecutándolos desde la raíz. Además,
+  el checkpoint de una fase quedó sin commitear y terminó en el mismo commit que la fase siguiente.
+- **Hallazgos que no corresponden a este TP y no toqué.** `npm audit` marca vulnerabilidades que ya venían de
+  antes (en el backend `proxy-addr` crítica y `qs` moderada vía Express; en el frontend `source-map-js` alta vía
+  Vite). El frontend se rompe (`e.reduce is not a function`) si `/api/gastos` devuelve un error en vez de una
+  lista. La imagen final del backend incluye la carpeta `tests/` y `vitest.config.mjs` porque el Dockerfile hace
+  `COPY . .`. Los dejé como están para no mezclar arreglos con el TP; quedan anotados.
+
+### Uso de inteligencia artificial (TP5)
+
+Usé Claude (Anthropic) en un proyecto de Claude en el que trabajamos por fases. La IA propuso la herramienta y los
+umbrales, escribió los refactors de testabilidad, los tests del backend y del frontend, la configuración de
+Vitest y de coverage, las etapas `test` de los Dockerfiles, los cambios de `ci.yml`, el código sin tests de los
+dos PRs (`resumirGastos` y `porcentajesPorCategoria`) y el borrador de esta sección. Yo revisé la explicación de
+cada fase antes de seguir, ejecuté todo lo de Git y GitHub (commits, pushes, branch, PRs y el merge), miré en
+GitHub Actions las corridas reales en rojo y en verde, comprobé que el merge se bloqueaba y se habilitaba, y
+descargué y abrí el reporte de coverage del artifact.
+
+**Cómo se verificó lo producido por la IA.** Por parte de la IA, en una copia de trabajo (no en mi repo): cada
+suite se probó con **mutaciones**, es decir, rompiendo a propósito el código real y comprobando que algún test
+fallara (por ejemplo, sacar la conversión a número, cambiar un `>` por `>=` o hacer que una regex acepte el mes
+13): se detectaron todas, incluidas las 6 de `resumirGastos`. Los refactors se verificaron comparando el
+comportamiento antes y después: 22 requests HTTP idénticas contra una base PostgreSQL real, con el mismo SQL, y 16
+escenarios de la interfaz idénticos. Las suites se corrieron con Node 20 y 22 (la de validaciones del backend, además, en cuatro zonas horarias),
+y el comando de coverage se probó fallando y pasando antes de subir nada. Por mi parte, lo que vi con mis ojos fueron
+las corridas reales de GitHub Actions: los números del pipeline (60.78 % y 72.22 % en rojo; 80.39 % y 90 % en
+verde) coincidieron con los que la IA había medido en local antes de subir. Esas pruebas de mutación y de
+equivalencia las ejecutó la IA; no las repetí yo.
