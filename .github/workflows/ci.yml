@@ -206,3 +206,100 @@ jobs:
           tags: ghcr.io/cotykazuf/ingsoft3-tp01-frontend:sha-${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  # --- Despliegue continuo a QA (TP6) ---
+  # Push a main -> los dos jobs de arriba en verde -> se despliega en QA -> smoke test.
+  # En un Pull Request este job aparece como SKIPPED (no despliega nada).
+  deploy-qa:
+    name: Desplegar en QA
+    # needs: espera a que build-backend y build-frontend terminen BIEN. Si alguno falla o se
+    # cancela, este job se saltea solo (no hace falta escribir success(): GitHub lo agrega).
+    needs: [build-backend, build-frontend]
+    # if: solo en un push a main. En un PR no se evalúa el environment ni se leen los secrets.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # environment: es lo que habilita leer los secrets del environment "qa".
+    environment: qa
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      # URLs públicas de QA (no son secretas).
+      API_URL: https://misgastos-api-qa.onrender.com
+      FRONT_URL: https://misgastos-front-qa.onrender.com
+    steps:
+      - name: Qué vamos a desplegar
+        run: echo "Desplegando en QA el commit $GITHUB_SHA"
+
+      # El deploy hook de Render es una URL que ya trae "?key=..." (la clave). Por eso el
+      # commit se agrega con "&ref=" y no con "?ref=" (si la URL no tuviera "?", se usa "?").
+      # ref=$GITHUB_SHA le dice a Render que construya ESE commit y no la punta de main.
+      # Render reconstruye el código desde el repo: en TP6 no usa la imagen de ghcr.
+      # El valor del hook viaja solo por variable de entorno: no se imprime ni se escribe en el YAML.
+      - name: Disparar el deploy de la API y del frontend en QA
+        env:
+          HOOK_API: ${{ secrets.RENDER_HOOK_API_QA }}
+          HOOK_FRONT: ${{ secrets.RENDER_HOOK_FRONT_QA }}
+        run: |
+          disparar() {
+            nombre="$1"
+            hook="$2"
+            # Borramos la respuesta anterior para no mostrar la de otro servicio por error.
+            rm -f respuesta.txt
+            if [ -z "$hook" ]; then
+              echo "::error::Falta el secret del hook de $nombre en el environment qa"
+              return 1
+            fi
+            case "$hook" in
+              *\?*) sep="&" ;;
+              *) sep="?" ;;
+            esac
+            codigo=$(curl --silent --show-error --max-time 30 --request POST \
+              --output respuesta.txt --write-out '%{http_code}' \
+              "${hook}${sep}ref=${GITHUB_SHA}") || codigo="sin respuesta"
+            echo "$nombre: Render respondió HTTP $codigo"
+            if [ -f respuesta.txt ]; then cat respuesta.txt; echo; fi
+            case "$codigo" in
+              2??) echo "$nombre: deploy del commit $GITHUB_SHA disparado" ;;
+              *)
+                echo "::error::No se pudo disparar el deploy de $nombre (HTTP $codigo)"
+                return 1
+                ;;
+            esac
+          }
+          disparar "API" "$HOOK_API"
+          disparar "Frontend" "$HOOK_FRONT"
+
+      # Smoke test: pregunta a QA hasta que responde bien, con reintentos.
+      # Un servicio gratuito de Render "duerme" y su primer pedido tarda hasta ~50 s (cold start),
+      # y además el deploy tarda en terminar: por eso cada intento espera hasta 60 s
+      # y se reintenta, en vez de un sleep fijo. Si no responde bien, el job falla.
+      - name: Smoke test de QA (con reintentos)
+        run: |
+          intentos=12
+          espera=15
+          verificar() {
+            nombre="$1"
+            url="$2"
+            patron="$3"
+            for i in $(seq 1 "$intentos"); do
+              codigo=$(curl --silent --show-error --max-time 60 \
+                --output cuerpo.txt --write-out '%{http_code}' "$url") || codigo="sin respuesta"
+              if [ "$codigo" = "200" ] && grep -Eq "$patron" cuerpo.txt; then
+                echo "OK    $nombre (intento $i)"
+                return 0
+              fi
+              echo "...   $nombre: intento $i/$intentos, HTTP $codigo"
+              sleep "$espera"
+            done
+            echo "::error::$nombre no respondió como se esperaba tras $intentos intentos"
+            return 1
+          }
+          # 1) el proceso del backend está vivo (no toca la base)
+          verificar "API /health" "$API_URL/health" '"status":"ok"'
+          # 2) un endpoint que SÍ consulta la base: responde 200 con una lista solo si el SELECT funcionó
+          verificar "API /api/gastos (consulta la base)" "$API_URL/api/gastos" '^\['
+          # 3) el frontend se sirve
+          verificar "Frontend /" "$FRONT_URL/" '<div id="root">'
+          # 4) el frontend llega a la API a través de nginx (BACKEND_URL en runtime)
+          verificar "Frontend /api/gastos (nginx hacia la API)" "$FRONT_URL/api/gastos" '^\['
