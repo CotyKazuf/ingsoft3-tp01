@@ -1,0 +1,43 @@
+server {
+    listen 80;
+
+    # SPA: sirve los archivos estaticos, y si la ruta pedida no es un archivo
+    # real (por ejemplo /resumen, que maneja react-router del lado del
+    # cliente), devuelve index.html para que React Router la resuelva.
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Todo lo que empiece con /api se reenvia al backend.
+    #
+    # Este archivo es una PLANTILLA (TP6). Al arrancar el contenedor, la imagen
+    # oficial de nginx reemplaza los marcadores de dolar-llave que hay mas abajo
+    # (los de BACKEND_URL y DNS_RESOLVER) por el valor de esas variables de
+    # entorno y deja el resultado en /etc/nginx/conf.d/.
+    # Asi la misma imagen sirve en cualquier entorno (local, QA, PROD) y la
+    # direccion del backend NO queda escrita dentro de la imagen:
+    #   BACKEND_URL    direccion del backend, sin barra final. Ej.:
+    #                  http://backend:3000  (Docker Compose)
+    #                  https://<api-del-entorno>.onrender.com  (Render)
+    #   DNS_RESOLVER   servidor DNS que nginx usa para resolver ese nombre.
+    #                  127.0.0.11 es el DNS interno de Docker Compose; en Render
+    #                  se usa uno publico (8.8.8.8).
+    # Los valores por defecto (los de Docker Compose) estan en el Dockerfile.
+    #
+    # La direccion va en una VARIABLE de nginx, no escrita directo en el
+    # proxy_pass, para que nginx la resuelva recien cuando llega un pedido y no
+    # al arrancar. Si estuviera escrita directo y el backend no existiera
+    # todavia, nginx se negaria a levantar.
+    resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+    set $backend_api ${BACKEND_URL};
+
+    location /api/ {
+        # Necesario cuando BACKEND_URL es https (Render): nginx le indica al
+        # backend el nombre del sitio (SNI) para negociar TLS. Con http no
+        # tiene efecto.
+        proxy_ssl_server_name on;
+        proxy_pass $backend_api;
+    }
+}
