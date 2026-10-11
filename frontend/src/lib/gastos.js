@@ -56,3 +56,19 @@ export function construirDatosGasto({ descripcion, monto, categoria, fecha, medi
         tipo: medioPago === 'Tarjeta' ? tipo : null,
     }
 }
+
+// Que porcentaje del gasto total representa cada categoria (solo las que tienen gastos),
+// de mayor a menor y redondeado a 1 decimal. Sin gastos devuelve una lista vacia
+// (asi no se divide por cero).
+export function porcentajesPorCategoria(gastos) {
+    const total = calcularTotal(gastos)
+    if (total <= 0) {
+        return []
+    }
+    return totalesPorCategoria(gastos)
+        .map(({ categoria, total: parcial }) => ({
+            categoria,
+            porcentaje: Math.round((parcial / total) * 1000) / 10,
+        }))
+        .sort((a, b) => b.porcentaje - a.porcentaje)
+}
