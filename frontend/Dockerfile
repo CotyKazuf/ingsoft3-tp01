@@ -24,6 +24,13 @@ RUN npm run build
 
 # ---- Etapa 3: nginx sirve los archivos estaticos ya compilados ----
 FROM nginx:alpine AS final
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# nginx.conf paso a ser una PLANTILLA: la imagen oficial de nginx procesa
+# todo lo que haya en /etc/nginx/templates/*.template al arrancar (reemplaza
+# ${VARIABLES} por variables de entorno) y escribe el resultado en conf.d/.
+# Los valores por defecto son los de Docker Compose; QA y PROD los pisan con
+# las variables de entorno del servicio (la imagen no cambia).
+ENV BACKEND_URL=http://backend:3000
+ENV DNS_RESOLVER=127.0.0.11
+COPY default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
