@@ -13,7 +13,7 @@ Evidencia de la cadena a producción (también se explica más abajo en la secci
 - **Promoción a PROD rechazada** (CI #34, commit `6ee0c47`, PR #37; con el motivo escrito): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38289788599
 - **Promoción a PROD aprobada y desplegada** (CI #36, commit `a26c8c4`, PR #38; QA verde → Waiting for review → aprobación → PROD con smoke verde): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/38301507642
 - **Registro de deployments del environment `production`** (el rechazo de CI #34 y el deploy activo de CI #36): https://github.com/CotyKazuf/ingsoft3-tp01/deployments
-- **Release `v6.0.0`:** [PENDIENTE: se crea al cierre del TP sobre el commit realmente desplegado en PROD (hoy `a26c8c4`); agregar la URL de la Release]
+- **Release `v6.0.0`:** https://github.com/CotyKazuf/ingsoft3-tp01/releases/tag/v6.0.0 (se crea al cierre del TP, sobre el commit realmente desplegado en PROD)
 
 ---
 
