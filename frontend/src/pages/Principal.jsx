@@ -25,7 +25,10 @@ function Principal({ gastos, categoriaFiltro, setCategoriaFiltro, mesFiltro, set
     return (
         <div>
             <header>
-                <h1>Mis Gastos {anioActual}</h1>
+                <div>
+                    <h1>Mis Gastos {anioActual}</h1>
+                    <small className="subtitulo-header">Gestor personal de gastos · entregado con el pipeline de CD</small>
+                </div>
                 <div className="acciones-header">
                     <button className="btn-agregar" onClick={() => navigate('/resumen')}>Ver por mes</button>
                     <button className="btn-agregar" onClick={irAAgregar}>Agregar gasto</button>
