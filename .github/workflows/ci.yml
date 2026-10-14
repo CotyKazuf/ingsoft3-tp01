@@ -6,6 +6,16 @@ on:
   push:
     branches: [main]
 
+# Imágenes de ESTA corrida (TP7: build once, deploy many).
+# Son exactamente las mismas que publican build-backend y build-frontend (mismo nombre, mismo
+# tag sha-<commit>, todo en minúsculas porque ghcr.io rechaza mayúsculas). Se definen UNA sola
+# vez acá arriba y las leen deploy-qa y deploy-prod: como ambos jobs son de la misma corrida,
+# github.sha vale lo mismo en los dos y PROD recibe la imagen que ya se verificó en QA.
+# No existe el tag latest: un tag que se mueve no dice qué código está corriendo.
+env:
+  IMG_API: ghcr.io/cotykazuf/ingsoft3-tp01-backend:sha-${{ github.sha }}
+  IMG_FRONT: ghcr.io/cotykazuf/ingsoft3-tp01-frontend:sha-${{ github.sha }}
+
 jobs:
   build-backend:
     runs-on: ubuntu-latest
@@ -208,7 +218,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=frontend
 
   # --- Despliegue continuo a QA (TP6) ---
-  # Push a main -> los dos jobs de arriba en verde -> se despliega en QA -> smoke test.
+  # Push a main -> los dos jobs de arriba en verde (y las imágenes publicadas) -> Render ejecuta
+  # esas imágenes en QA (imgURL) -> smoke test.
   # En un Pull Request este job aparece como SKIPPED (no despliega nada).
   deploy-qa:
     name: Desplegar en QA
@@ -229,13 +240,19 @@ jobs:
       FRONT_URL: https://misgastos-front-qa.onrender.com
     steps:
       - name: Qué vamos a desplegar
-        run: echo "Desplegando en QA el commit $GITHUB_SHA"
+        run: |
+          echo "Desplegando en QA el commit $GITHUB_SHA"
+          echo "Imagen de la API:    $IMG_API"
+          echo "Imagen del frontend: $IMG_FRONT"
 
-      # El deploy hook de Render es una URL que ya trae "?key=..." (la clave). Por eso el
-      # commit se agrega con "&ref=" y no con "?ref=" (si la URL no tuviera "?", se usa "?").
-      # ref=$GITHUB_SHA le dice a Render que construya ESE commit y no la punta de main.
-      # Render reconstruye el código desde el repo: en TP6 no usa la imagen de ghcr.
-      # El valor del hook viaja solo por variable de entorno: no se imprime ni se escribe en el YAML.
+      # Desde TP7 los servicios de Render son "Existing Image": ya no construyen commits, ejecutan
+      # una imagen del registry. El deploy hook es una URL que ya trae "?key=..." (la clave) y
+      # se le agrega imgURL=<imagen>:sha-<commit>, que le dice a Render QUÉ imagen ejecutar
+      # (solo puede cambiar el tag: el nombre de la imagen tiene que ser el configurado en el servicio).
+      # curl --get --data-urlencode agrega "imgURL=..." a la URL ya codificado ("/" y ":" pasan a
+      # %2F y %3A) y, como la URL ya tiene "?", usa "&" solo. --request POST mantiene el método POST.
+      # Ya no se usa "&ref=": un servicio con imagen no construye commits y lo ignoraría.
+      # El valor del hook viaja solo por variable de entorno: no se imprime ni se escribe aquí.
       - name: Disparar el deploy de la API y del frontend en QA
         env:
           HOOK_API: ${{ secrets.RENDER_HOOK_API_QA }}
@@ -244,31 +261,34 @@ jobs:
           disparar() {
             nombre="$1"
             hook="$2"
+            imagen="$3"
             # Borramos la respuesta anterior para no mostrar la de otro servicio por error.
             rm -f respuesta.txt
             if [ -z "$hook" ]; then
               echo "::error::Falta el secret del hook de $nombre en el environment qa"
               return 1
             fi
-            case "$hook" in
-              *\?*) sep="&" ;;
-              *) sep="?" ;;
-            esac
+            if [ -z "$imagen" ]; then
+              echo "::error::Falta la imagen a desplegar de $nombre"
+              return 1
+            fi
+            echo "$nombre: pidiendo a Render que ejecute $imagen"
             codigo=$(curl --silent --show-error --max-time 30 --request POST \
+              --get --data-urlencode "imgURL=${imagen}" \
               --output respuesta.txt --write-out '%{http_code}' \
-              "${hook}${sep}ref=${GITHUB_SHA}") || codigo="sin respuesta"
+              "$hook") || codigo="sin respuesta"
             echo "$nombre: Render respondió HTTP $codigo"
             if [ -f respuesta.txt ]; then cat respuesta.txt; echo; fi
             case "$codigo" in
-              2??) echo "$nombre: deploy del commit $GITHUB_SHA disparado" ;;
+              2??) echo "$nombre: deploy de $imagen disparado" ;;
               *)
                 echo "::error::No se pudo disparar el deploy de $nombre (HTTP $codigo)"
                 return 1
                 ;;
             esac
           }
-          disparar "API" "$HOOK_API"
-          disparar "Frontend" "$HOOK_FRONT"
+          disparar "API" "$HOOK_API" "$IMG_API"
+          disparar "Frontend" "$HOOK_FRONT" "$IMG_FRONT"
 
       # Smoke test: pregunta a QA hasta que responde bien, con reintentos.
       # Un servicio gratuito de Render "duerme" y su primer pedido tarda hasta ~50 s (cold start),
@@ -333,11 +353,18 @@ jobs:
       FRONT_URL: https://misgastos-front-prod.onrender.com
     steps:
       - name: Qué vamos a desplegar
-        run: echo "Desplegando en PROD el commit $GITHUB_SHA (el mismo que ya pasó por QA)"
+        run: |
+          echo "Desplegando en PROD el commit $GITHUB_SHA (el mismo que ya pasó por QA)"
+          echo "Imagen de la API:    $IMG_API"
+          echo "Imagen del frontend: $IMG_FRONT"
 
-      # Igual que en QA: el hook ya trae "?key=...", por eso el commit se agrega con "&ref=".
-      # ref=$GITHUB_SHA hace que PROD construya EXACTAMENTE el commit de esta corrida, el mismo
-      # que se verificó en QA, y no la punta de main si entró otro merge mientras se esperaba.
+      # Desde TP7 los servicios de Render son "Existing Image": ya no construyen commits, ejecutan
+      # una imagen del registry. El deploy hook es una URL que ya trae "?key=..." (la clave) y
+      # se le agrega imgURL=<imagen>:sha-<commit>, que le dice a Render QUÉ imagen ejecutar
+      # (solo puede cambiar el tag: el nombre de la imagen tiene que ser el configurado en el servicio).
+      # curl --get --data-urlencode agrega "imgURL=..." a la URL ya codificado ("/" y ":" pasan a
+      # %2F y %3A) y, como la URL ya tiene "?", usa "&" solo. --request POST mantiene el método POST.
+      # Ya no se usa "&ref=": un servicio con imagen no construye commits y lo ignoraría.
       # Los hooks de PROD viven solo en el environment production (no en QA ni en el repo).
       # El valor del hook viaja solo por variable de entorno: no se imprime ni se escribe aquí.
       - name: Disparar el deploy de la API y del frontend en PROD
@@ -348,31 +375,34 @@ jobs:
           disparar() {
             nombre="$1"
             hook="$2"
+            imagen="$3"
             # Borramos la respuesta anterior para no mostrar la de otro servicio por error.
             rm -f respuesta.txt
             if [ -z "$hook" ]; then
               echo "::error::Falta el secret del hook de $nombre en el environment production"
               return 1
             fi
-            case "$hook" in
-              *\?*) sep="&" ;;
-              *) sep="?" ;;
-            esac
+            if [ -z "$imagen" ]; then
+              echo "::error::Falta la imagen a desplegar de $nombre"
+              return 1
+            fi
+            echo "$nombre: pidiendo a Render que ejecute $imagen"
             codigo=$(curl --silent --show-error --max-time 30 --request POST \
+              --get --data-urlencode "imgURL=${imagen}" \
               --output respuesta.txt --write-out '%{http_code}' \
-              "${hook}${sep}ref=${GITHUB_SHA}") || codigo="sin respuesta"
+              "$hook") || codigo="sin respuesta"
             echo "$nombre: Render respondió HTTP $codigo"
             if [ -f respuesta.txt ]; then cat respuesta.txt; echo; fi
             case "$codigo" in
-              2??) echo "$nombre: deploy del commit $GITHUB_SHA disparado en PROD" ;;
+              2??) echo "$nombre: deploy de $imagen disparado en PROD" ;;
               *)
                 echo "::error::No se pudo disparar el deploy de $nombre en PROD (HTTP $codigo)"
                 return 1
                 ;;
             esac
           }
-          disparar "API" "$HOOK_API"
-          disparar "Frontend" "$HOOK_FRONT"
+          disparar "API" "$HOOK_API" "$IMG_API"
+          disparar "Frontend" "$HOOK_FRONT" "$IMG_FRONT"
 
       # Smoke test de PROD: mismas comprobaciones y mismos reintentos que en QA, contra las URLs
       # de PROD (cold start de ~50 s del plan gratuito y deploy que tarda en terminar).
