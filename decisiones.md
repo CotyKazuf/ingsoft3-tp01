@@ -643,6 +643,36 @@ persona mire el cambio antes de que llegue a producción.
 - Los eventos de Render tienen precisión de minuto; para medir tiempos usé la pantalla de cada deploy, que
   muestra la hora de inicio con segundos y la duración.
 
+### Qué quedó por variable y qué quedó adentro de la imagen
+
+La consigna pide que la dirección del backend no esté adentro de la imagen del frontend. Quedó así.
+
+**Imagen del frontend.** Adentro de la imagen está lo que no cambia entre entornos: la aplicación React ya
+compilada (`/usr/share/nginx/html`), que llama siempre a la ruta relativa `/api/...`, y nginx con su plantilla
+(`default.conf.template`). Por variable, leída cuando el contenedor arranca, quedan dos valores:
+
+- `BACKEND_URL`: a dónde reenvía nginx lo que llega a `/api/`. En QA vale `https://misgastos-api-qa.onrender.com`
+  y en PROD `https://misgastos-api-prod.onrender.com`. El valor por defecto del Dockerfile es
+  `http://backend:3000`, que es el que usa `docker compose`.
+- `DNS_RESOLVER`: el servidor DNS que nginx usa para resolver ese nombre. En Render vale `8.8.8.8`; el valor por
+  defecto es `127.0.0.11`, el DNS interno de Docker.
+
+La imagen oficial de nginx reemplaza esas dos variables en la plantilla cada vez que arranca. Lo comprobé con la
+misma imagen local: con los valores por defecto el archivo generado apuntaba a `backend:3000` y, arrancándola con
+`-e BACKEND_URL=https://misgastos-api-qa.onrender.com -e DNS_RESOLVER=8.8.8.8`, apuntaba a la API de QA de Render
+(`curl http://localhost:8082/api/gastos` devolvió `[]`). Cambió el comportamiento sin reconstruir la imagen.
+
+**Imagen del backend.** Adentro está el código de Express con sus dependencias. Por variable, configuradas en
+cada servicio de Render y nunca en la imagen ni en el repositorio, quedan los datos de conexión a la base
+(`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) y `PGSSLMODE=require`; el puerto (`PORT`) lo pone
+Render. Lo que distingue a QA de PROD en el backend es la base: `DB_NAME` vale `app_qa` en un entorno y `app_prod`
+en el otro.
+
+**Qué no hay adentro de ninguna imagen:** ni la URL de otro entorno ni credenciales. Por eso esto hace posible el
+TP7: una misma imagen publicada puede correr en QA y en PROD, y cada entorno la apunta a su propia API y su propia
+base solo con variables. En este TP Render igual construye cada servicio por separado desde el repositorio (ver la
+sección siguiente), así que lo que se logró hoy es que la imagen *pueda* ser la misma, no que ya lo sea.
+
 ### Qué garantía se pierde porque Render reconstruye desde el repo
 
 En este TP, Render no ejecuta la imagen que el pipeline construyó y publicó en GHCR: recibe el deploy hook con el
