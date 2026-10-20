@@ -57,11 +57,12 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
 
     return (
         <form onSubmit={handleSubmit}>
-            {error && <div className="mensaje-error">{error}</div>}
+            {error && <div className="mensaje-error" role="alert">{error}</div>}
 
             <div className="campo">
-                <label>Descripción</label>
+                <label htmlFor="descripcion">Descripción</label>
                 <input
+                    id="descripcion"
                     type="text"
                     placeholder="Ej: Supermercado"
                     value={descripcion}
@@ -71,8 +72,9 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
             </div>
 
             <div className="campo">
-                <label>Monto</label>
+                <label htmlFor="monto">Monto</label>
                 <input
+                    id="monto"
                     type="number"
                     placeholder="0"
                     value={monto}
@@ -84,8 +86,8 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
             </div>
 
             <div className="campo">
-                <label>Categoría</label>
-                <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+                <label htmlFor="categoria">Categoría</label>
+                <select id="categoria" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
                     {CATEGORIAS.map((c) => (
                         <option key={c} value={c}>{c}</option>
                     ))}
@@ -93,8 +95,9 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
             </div>
 
             <div className="campo">
-                <label>Fecha</label>
+                <label htmlFor="fecha">Fecha</label>
                 <input
+                    id="fecha"
                     type="date"
                     value={fecha}
                     onChange={(e) => setFecha(e.target.value)}
@@ -105,8 +108,8 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
             </div>
 
             <div className="campo">
-                <label>Medio de pago</label>
-                <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)}>
+                <label htmlFor="medio-pago">Medio de pago</label>
+                <select id="medio-pago" value={medioPago} onChange={(e) => setMedioPago(e.target.value)}>
                     {MEDIOS_PAGO.map((m) => (
                         <option key={m} value={m}>{m}</option>
                     ))}
@@ -116,8 +119,9 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
             {medioPago === 'Tarjeta' && (
                 <>
                     <div className="campo">
-                        <label>Nombre de la tarjeta</label>
+                        <label htmlFor="tarjeta">Nombre de la tarjeta</label>
                         <input
+                            id="tarjeta"
                             type="text"
                             placeholder="Ej: Visa BNA"
                             value={tarjeta}
@@ -125,8 +129,8 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
                         />
                     </div>
                     <div className="campo">
-                        <label>Tipo</label>
-                        <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                        <label htmlFor="tipo">Tipo</label>
+                        <select id="tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
                             <option value="">Tipo...</option>
                             {TIPOS_TARJETA.map((t) => (
                                 <option key={t} value={t}>{t}</option>
