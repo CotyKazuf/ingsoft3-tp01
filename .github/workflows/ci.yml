@@ -391,7 +391,7 @@ jobs:
     needs: integracion
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: read
     env:
@@ -419,6 +419,47 @@ jobs:
       - name: Instalar Chromium y sus dependencias
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+
+      # El smoke de deploy-qa solo prueba que QA RESPONDE, no QUÉ versión sirve: mientras Render
+      # cambia de imagen, el frontend anterior sigue contestando. Si las pruebas corrieran en ese
+      # momento, probarían la versión vieja (y un frontend roto podría pasar como sano).
+      # Este paso espera a que QA sirva el frontend de ESTA imagen: saca de la imagen publicada
+      # (sha-<commit> de esta corrida, la misma que mandó deploy-qa) su index.html, que apunta a
+      # archivos con hash en el nombre (/assets/index-<hash>.js y .css; el hash cambia si cambia
+      # el código), y espera a que https://...front-qa.onrender.com/ devuelva los mismos nombres.
+      # Si nunca los devuelve, el job FALLA (no se prueba "a ciegas") y PROD no corre.
+      # Límite: esto identifica solo el FRONTEND. La API no expone qué versión corre.
+      - name: Esperar a que QA sirva el frontend de esta imagen
+        run: |
+          assets() { grep -oE '/assets/[^"]+\.(js|css)' "$1" | sort -u; }
+          esperar() {
+            intentos=30
+            espera=15
+            # 1) lo que trae la imagen publicada (es pública: se baja sin login)
+            docker create --name front-imagen "$IMG_FRONT" > /dev/null
+            docker cp front-imagen:/usr/share/nginx/html/index.html esperado.html
+            docker rm front-imagen > /dev/null
+            if ! esperados=$(assets esperado.html); then
+              echo "::error::No se encontraron archivos /assets/ en el index.html de $IMG_FRONT"
+              return 1
+            fi
+            echo "La imagen $IMG_FRONT referencia:"
+            echo "$esperados"
+            # 2) esperar a que QA sirva exactamente esos
+            for i in $(seq 1 "$intentos"); do
+              codigo=$(curl --silent --show-error --max-time 60 \
+                --output actual.html --write-out '%{http_code}' "$E2E_BASE_URL/") || codigo="sin respuesta"
+              if [ "$codigo" = "200" ] && actuales=$(assets actual.html) && [ "$actuales" = "$esperados" ]; then
+                echo "OK    QA ya sirve el frontend de esta imagen (intento $i)"
+                return 0
+              fi
+              echo "...   QA todavía no sirve el frontend de esta imagen: intento $i/$intentos, HTTP $codigo"
+              sleep "$espera"
+            done
+            echo "::error::QA no sirvió el frontend de $IMG_FRONT tras $intentos intentos: no se puede probar esta versión"
+            return 1
+          }
+          esperar
 
       # Solo gastos.spec.js: el proyecto "e2e" de playwright.config.js.
       - name: Ejecutar los flujos E2E contra QA
