@@ -16,3 +16,7 @@ Thumbs.db
 .idea/
 # reportes de coverage (se generan con npm run test:coverage)
 coverage/
+
+# reportes y artefactos de Playwright (se generan con npm run test:integracion / test:e2e)
+playwright-report/
+test-results/

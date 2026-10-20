@@ -3,3 +3,7 @@ dist/
 .git/
 
 coverage/
+
+# reportes de Playwright: se generan al correr las pruebas, no van a la imagen
+playwright-report/
+test-results/

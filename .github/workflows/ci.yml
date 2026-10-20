@@ -221,6 +221,7 @@ jobs:
   # Push a main -> los dos jobs de arriba en verde (y las imágenes publicadas) -> Render ejecuta
   # esas imágenes en QA (imgURL) -> smoke test.
   # En un Pull Request este job aparece como SKIPPED (no despliega nada).
+  # Desde TP7 QA no es el final: sigue integracion -> e2e -> (aprobación humana) -> deploy-prod.
   deploy-qa:
     name: Desplegar en QA
     # needs: espera a que build-backend y build-frontend terminen BIEN. Si alguno falla o se
@@ -324,12 +325,166 @@ jobs:
           # 4) el frontend llega a la API a través de nginx (BACKEND_URL en runtime)
           verificar "Frontend /api/gastos (nginx hacia la API)" "$FRONT_URL/api/gastos" '^\['
 
+  # --- Compuertas de calidad contra QA (TP7) ---
+  # La cadena completa es:
+  #   build-backend + build-frontend -> deploy-qa -> integracion -> e2e -> deploy-prod
+  # y deploy-prod además espera la aprobación humana del environment "production".
+  # Cada "needs" es una compuerta: un job solo arranca si TODOS los jobs de su needs terminaron
+  # en success. Si uno falla, se cancela o se saltea, el siguiente se saltea solo (queda gris,
+  # sin ejecutar ningún paso). Por eso acá no hay continue-on-error, "|| true", exit 0 ni
+  # always(): nada convierte un fallo en verde. La única condición especial está en los pasos
+  # de subida de reportes (!cancelled()), que no cambian el resultado del job.
+  # En un Pull Request estos dos jobs aparecen como SKIPPED, igual que deploy-qa y deploy-prod.
+  integracion:
+    name: Integración (API de QA)
+    # needs: arranca cuando deploy-qa terminó BIEN (despliegue + smoke test).
+    needs: deploy-qa
+    # if: solo como consecuencia de un push a main (igual que deploy-qa y deploy-prod).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # API pública de QA (no es secreta). El spec la lee de API_BASE_URL.
+      API_BASE_URL: https://misgastos-api-qa.onrender.com
+    steps:
+      - name: Qué vamos a probar
+        run: |
+          echo "Pruebas de integración (sin navegador) contra la API de QA: $API_BASE_URL"
+          echo "Commit de esta corrida: $GITHUB_SHA"
+
+      - name: Bajar el código al runner
+        uses: actions/checkout@v6
+
+      - name: Instalar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias del frontend (npm ci)
+        working-directory: frontend
+        run: npm ci
+
+      # Solo api.spec.js: el proyecto "integracion" de playwright.config.js. NO se instala ningún
+      # navegador: estas pruebas son pedidos HTTP directos a la API.
+      # Si una prueba falla, el comando termina con error y ESTE paso deja el job en rojo.
+      - name: Ejecutar la suite de integración contra QA
+        working-directory: frontend
+        run: npx playwright test --project=integracion e2e/api.spec.js
+
+      # !cancelled() SOLO acá: el reporte se publica aunque la prueba haya fallado, para poder
+      # diagnosticar. Este paso no cambia el resultado: el job ya quedó rojo por el paso anterior.
+      - name: Publicar el reporte de integración (artifact)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-integracion
+          path: frontend/playwright-report
+          retention-days: 30
+          if-no-files-found: warn
+
+  e2e:
+    name: E2E (frontend de QA)
+    # needs: arranca solo si integracion terminó BIEN. Si la API ya falla en integración,
+    # no tiene sentido probar la pantalla: este job se saltea y PROD también.
+    needs: integracion
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      # Frontend público de QA (no es secreto). El spec la lee de E2E_BASE_URL.
+      E2E_BASE_URL: https://misgastos-front-qa.onrender.com
+    steps:
+      - name: Qué vamos a probar
+        run: |
+          echo "Pruebas E2E (Chromium real) contra el frontend de QA: $E2E_BASE_URL"
+          echo "Commit de esta corrida: $GITHUB_SHA"
+
+      - name: Bajar el código al runner
+        uses: actions/checkout@v6
+
+      - name: Instalar Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias del frontend (npm ci)
+        working-directory: frontend
+        run: npm ci
+
+      # Descarga Chromium y las librerías del sistema que necesita (--with-deps).
+      - name: Instalar Chromium y sus dependencias
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # El smoke de deploy-qa solo prueba que QA RESPONDE, no QUÉ versión sirve: mientras Render
+      # cambia de imagen, el frontend anterior sigue contestando. Si las pruebas corrieran en ese
+      # momento, probarían la versión vieja (y un frontend roto podría pasar como sano).
+      # Este paso espera a que QA sirva el frontend de ESTA imagen: saca de la imagen publicada
+      # (sha-<commit> de esta corrida, la misma que mandó deploy-qa) su index.html, que apunta a
+      # archivos con hash en el nombre (/assets/index-<hash>.js y .css; el hash cambia si cambia
+      # el código), y espera a que https://...front-qa.onrender.com/ devuelva los mismos nombres.
+      # Si nunca los devuelve, el job FALLA (no se prueba "a ciegas") y PROD no corre.
+      # Límite: esto identifica solo el FRONTEND. La API no expone qué versión corre.
+      - name: Esperar a que QA sirva el frontend de esta imagen
+        run: |
+          assets() { grep -oE '/assets/[^"]+\.(js|css)' "$1" | sort -u; }
+          esperar() {
+            intentos=30
+            espera=15
+            # 1) lo que trae la imagen publicada (es pública: se baja sin login)
+            docker create --name front-imagen "$IMG_FRONT" > /dev/null
+            docker cp front-imagen:/usr/share/nginx/html/index.html esperado.html
+            docker rm front-imagen > /dev/null
+            if ! esperados=$(assets esperado.html); then
+              echo "::error::No se encontraron archivos /assets/ en el index.html de $IMG_FRONT"
+              return 1
+            fi
+            echo "La imagen $IMG_FRONT referencia:"
+            echo "$esperados"
+            # 2) esperar a que QA sirva exactamente esos
+            for i in $(seq 1 "$intentos"); do
+              codigo=$(curl --silent --show-error --max-time 60 \
+                --output actual.html --write-out '%{http_code}' "$E2E_BASE_URL/") || codigo="sin respuesta"
+              if [ "$codigo" = "200" ] && actuales=$(assets actual.html) && [ "$actuales" = "$esperados" ]; then
+                echo "OK    QA ya sirve el frontend de esta imagen (intento $i)"
+                return 0
+              fi
+              echo "...   QA todavía no sirve el frontend de esta imagen: intento $i/$intentos, HTTP $codigo"
+              sleep "$espera"
+            done
+            echo "::error::QA no sirvió el frontend de $IMG_FRONT tras $intentos intentos: no se puede probar esta versión"
+            return 1
+          }
+          esperar
+
+      # Solo gastos.spec.js: el proyecto "e2e" de playwright.config.js.
+      - name: Ejecutar los flujos E2E contra QA
+        working-directory: frontend
+        run: npx playwright test --project=e2e e2e/gastos.spec.js
+
+      # !cancelled() SOLO acá (ver integracion): el reporte (con capturas y trazas de los
+      # reintentos) se publica aunque una prueba haya fallado.
+      - name: Publicar el reporte E2E (artifact)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-e2e
+          path: frontend/playwright-report
+          retention-days: 30
+          if-no-files-found: warn
+
   deploy-prod:
     name: Desplegar en PROD
-    # needs: PROD solo se considera si deploy-qa terminó BIEN (y, por transitividad, si los dos
-    # builds también). Si QA falla, se cancela o se saltea, este job se saltea solo. No se usa
+    # needs: PROD solo se considera si e2e terminó BIEN y, por transitividad, si también
+    # terminaron bien integracion, deploy-qa y los dos builds (e2e -> integracion -> deploy-qa ->
+    # builds). Si cualquiera falla, se cancela o se saltea, este job se saltea solo. No se usa
     # always(), !cancelled() ni continue-on-error: nada permite correr "pese a fallos previos".
-    needs: deploy-qa
+    # Recién cuando todo está en verde se llega al environment y se pide la aprobación humana.
+    needs: e2e
     # if: solo en un push a main (igual que QA). En un PR este job no corre.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -354,7 +509,7 @@ jobs:
     steps:
       - name: Qué vamos a desplegar
         run: |
-          echo "Desplegando en PROD el commit $GITHUB_SHA (el mismo que ya pasó por QA)"
+          echo "Desplegando en PROD el commit $GITHUB_SHA (el mismo que ya pasó por QA, integración y e2e)"
           echo "Imagen de la API:    $IMG_API"
           echo "Imagen del frontend: $IMG_FRONT"
 

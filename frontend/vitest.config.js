@@ -1,9 +1,15 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 
 export default defineConfig({
   test: {
     // Los tests viven al lado del codigo que prueban, en src/ (por ejemplo src/lib/)
     include: ['src/**/*.test.js'],
+    // e2e/ es de Playwright (TP7), no de Vitest: sus archivos *.spec.js usan otro runner y
+    // necesitan un navegador y un ambiente desplegado. Vitest los ignora por dos motivos:
+    // el include de arriba solo mira src/, y aca se excluye e2e/ de forma explicita por si
+    // alguien ampliara el include. Se suma a los excludes por defecto (node_modules, dist...)
+    // en vez de reemplazarlos.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     // Solo logica pura: Node, sin navegador simulado (no hay jsdom ni DOM)
     environment: 'node',
 
