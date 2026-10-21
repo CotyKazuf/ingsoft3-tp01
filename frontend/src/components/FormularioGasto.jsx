@@ -42,7 +42,7 @@ function FormularioGasto({ onGastoGuardado, gastoEditando }) {
         e.preventDefault()
         setError('')
 
-        const datosGasto = construirDatosGasto({ descripcion, categoria, fecha, medioPago, tarjeta, tipo })
+        const datosGasto = construirDatosGasto({ descripcion, monto, categoria, fecha, medioPago, tarjeta, tipo })
 
         guardarGastoEnApi(datosGasto, gastoEditando)
             .then(() => {
