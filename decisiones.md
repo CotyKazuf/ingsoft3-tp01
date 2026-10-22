@@ -36,7 +36,7 @@ e2e → pausa de revisión de `production` → aprobada por CotyKazuf → PROD c
 
 **Release y deployments:**
 
-- **Release `v7.0.0`:** [PENDIENTE: link de la release, https://github.com/CotyKazuf/ingsoft3-tp01/releases/tag/v7.0.0, cuando se cree sobre `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`].
+- **Release `v7.0.0`** (sobre el commit `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`, el desplegado en PROD): https://github.com/CotyKazuf/ingsoft3-tp01/releases/tag/v7.0.0
 - **Deployments** (qué commit está desplegado en cada environment): https://github.com/CotyKazuf/ingsoft3-tp01/deployments
 
 **Los *Events* de Render no son públicos** (viven dentro de mi panel y no se pueden linkear). Los muestro en vivo en la
@@ -1005,9 +1005,11 @@ docker pull ghcr.io/cotykazuf/ingsoft3-tp01-backend:sha-<ese commit>
 docker pull ghcr.io/cotykazuf/ingsoft3-tp01-frontend:sha-<ese commit>
 ```
 
-El tag `v7.0.0` se crea al cierre sobre el commit desplegado en PROD, `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`.
-[PENDIENTE: pegar acá el resultado real de `git rev-list -n1 v7.0.0` y confirmar que coincide con ese commit y con
-la etiqueta visible en los dos packages, cuando el tag y la release existan.]
+El tag `v7.0.0` es un tag anotado, creado sobre el commit desplegado en PROD, `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`
+(el que GitHub Deployments marca como *Active* en `production`, desplegado por CI #47), y no sobre el último commit de
+`main`. Resultado real de `git rev-list -n1 v7.0.0`: `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`. Ese mismo
+`sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` es la etiqueta que se ve en el package del backend y en el del frontend, y
+la que figura en los logs de los jobs de QA y de PROD de CI #47.
 
 ### Cómo se comprueba, desde afuera, que un entorno ejecuta la imagen y no una reconstrucción
 
