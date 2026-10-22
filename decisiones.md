@@ -1,3 +1,50 @@
+# Enlaces del TP7
+
+Corrida roja de la demostración: **CI #45** (commit que rompió la app `6e41e15`, PR #42). Corrida completa en verde
+posterior: **CI #47** (commit del arreglo `15cce3d`, PR #43), que es también el commit que quedó desplegado en PROD.
+
+**Paquetes públicos del registry (GHCR)**, con sus etiquetas `sha-<commit>`:
+
+- **Package del backend:** https://github.com/CotyKazuf/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend
+  - `sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` (commit desplegado en PROD): https://github.com/users/CotyKazuf/packages/container/ingsoft3-tp01-backend/1423736470?tag=sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050
+  - `sha-6e41e1512889cac131e2e53522d21ae25faded8b` (commit que rompió la app): https://github.com/users/CotyKazuf/packages/container/ingsoft3-tp01-backend/1412941505?tag=sha-6e41e1512889cac131e2e53522d21ae25faded8b
+- **Package del frontend:** https://github.com/CotyKazuf/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-frontend
+  - `sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` (commit desplegado en PROD): https://github.com/users/CotyKazuf/packages/container/ingsoft3-tp01-frontend/1423734701?tag=sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050
+  - `sha-6e41e1512889cac131e2e53522d21ae25faded8b` (commit que rompió la app): https://github.com/users/CotyKazuf/packages/container/ingsoft3-tp01-frontend/1412940725?tag=sha-6e41e1512889cac131e2e53522d21ae25faded8b
+
+**Corrida donde la integración quedó VERDE y la e2e ROJA** (CI #45; `Desplegar en PROD` quedó sin arrancar):
+
+- **Commit que rompió la app** (PR #42; toca `frontend/src/components/FormularioGasto.jsx`, no `e2e/`): https://github.com/CotyKazuf/ingsoft3-tp01/commit/6e41e1512889cac131e2e53522d21ae25faded8b — PR: https://github.com/CotyKazuf/ingsoft3-tp01/pull/42
+- **Corrida roja:** https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39360725599
+- **Artefacto `playwright-report-integracion`** de esa corrida (en verde, 3 passed): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39360725599/artifacts/12237506050
+- **Artefacto `playwright-report-e2e`** de esa corrida (en rojo, con screenshot y traza del fallo): https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39360725599/artifacts/12237855531
+
+(Los artefactos son un ZIP: GitHub pide estar con la sesión iniciada para descargarlos. Se abren con
+`npx playwright show-report <carpeta>`.)
+
+**Corrida completa en verde, hasta PROD** (CI #47, commit `15cce3d`, PR #43: build → QA con smoke → integración →
+e2e → pausa de revisión de `production` → aprobada por CotyKazuf → PROD con smoke):
+
+- **Corrida:** https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39655102791 — PR: https://github.com/CotyKazuf/ingsoft3-tp01/pull/43
+- **Artefacto `playwright-report-integracion`:** https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39655102791/artifacts/12369784326
+- **Artefacto `playwright-report-e2e`:** https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39655102791/artifacts/12371107157
+
+**Entornos (vivos hasta la defensa):**
+
+- **QA:** frontend https://misgastos-front-qa.onrender.com — API https://misgastos-api-qa.onrender.com
+- **PROD:** frontend https://misgastos-front-prod.onrender.com — API https://misgastos-api-prod.onrender.com
+
+**Release y deployments:**
+
+- **Release `v7.0.0`** (sobre el commit `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`, el desplegado en PROD): https://github.com/CotyKazuf/ingsoft3-tp01/releases/tag/v7.0.0
+- **Deployments** (qué commit está desplegado en cada environment): https://github.com/CotyKazuf/ingsoft3-tp01/deployments
+
+**Los *Events* de Render no son públicos** (viven dentro de mi panel y no se pueden linkear). Los muestro en vivo en la
+defensa: en cada uno de los cuatro servicios, el deploy dice «Triggered via Deploy Hook» y nombra la imagen
+`sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` de CI #47 (ids de deploy en la sección TP7, más abajo).
+
+---
+
 # Enlaces de este TP (TP6)
 
 - **Package del backend en GHCR** (imagen publicada por el pipeline, tag `sha-<commit>`): https://github.com/CotyKazuf/ingsoft3-tp01/pkgs/container/ingsoft3-tp01-backend/1367259687?tag=sha-1ec006b3ad9387b72c6611364995e5728fe0a927
@@ -873,3 +920,403 @@ publicación como último paso, el deploy a QA, el rechazo y la aprobación); re
 commit correspondía cada deploy y que los hooks no estuvieran cruzados; comprobé en Neon, con el selector de base
 de datos, qué datos había en cada base; verifiqué a mano en el navegador (ventana privada) el cambio visual en QA y
 en PROD, antes y después de aprobar y después del rollback; y medí el rollback con el reloj de Render.
+
+---
+
+## TP7
+
+### Build once, deploy many: qué problema del TP6 resuelve la imagen como unidad
+
+En el TP6 el pipeline construía y publicaba una imagen por commit en GHCR (`sha-<commit>`), pero Render no la
+usaba: recibía el deploy hook con el commit y **volvía a construir** la aplicación desde el repositorio. Eso quedó
+escrito en la sección «Qué garantía se pierde porque Render reconstruye desde el repo» del TP6: lo que corría en QA
+y en PROD no era la imagen verificada, sino otra construcción del mismo código. El problema que eso permite es
+concreto: dos construcciones del mismo commit pueden salir distintas (una imagen base o una dependencia que se
+resuelve distinto entre un día y otro), y entonces lo que probé en QA no es, bit a bit, lo que llega a PROD.
+Aclaro que en mi proyecto **no observé** una divergencia real de ese tipo: el riesgo es estructural y lo documenté en
+el TP6; no tengo un ejemplo propio de que haya pasado.
+
+Qué cambié: la unidad de release pasó a ser **la imagen**. El pipeline construye cada imagen **una sola vez** (job
+`build-backend` y `build-frontend`, en el push a `main`), la publica como `sha-<commit>` y, después, le dice a cada
+servicio de Render **qué imagen ejecutar** mediante el deploy hook con `imgURL=<imagen>:sha-<commit>`. Los cuatro
+servicios (API y frontend, en QA y en PROD) pasaron a ser «Existing Image»: ya no tienen repositorio ni build. Lo que
+verifican la integración y la e2e en QA es exactamente la imagen que después recibe PROD. La imagen se define una
+sola vez, en el bloque `env:` del workflow (`IMG_API` e `IMG_FRONT`), y esas dos variables se usan en los builds, en
+`deploy-qa` y en `deploy-prod`: no hay forma de que QA y PROD reciban etiquetas distintas dentro de una misma corrida.
+
+### Etiquetas: `sha-<commit>` en el registry y `v7.0.0` en git
+
+- **`sha-<commit>`** (en GHCR) identifica **una imagen concreta**, construida a partir de un commit concreto. El
+  pipeline la publica en cada push a `main` y es lo que se despliega y se promueve: QA y PROD reciben el mismo
+  `sha-<commit>` de la misma corrida. Por eso es la etiqueta de la que depende la cadena.
+- **`v7.0.0`** (tag de git y release de GitHub) **no es una imagen**: es un nombre legible que se pone, al cerrar el
+  TP, sobre el commit que quedó desplegado en PROD. No se promueve con él: sirve para decir «esta versión es ésta» y
+  para llegar a la imagen (sección siguiente). Está pensado sobre el commit que dice *Deployments* para PROD, no sobre
+  el último de `main`.
+
+**Quién escribe en el registry y con qué credencial.** Solo los jobs de build, con el `GITHUB_TOKEN` automático y el
+permiso `packages: write` únicamente en esos jobs. No hay ningún token personal mío en el YAML. Para que ese token
+pudiera escribir tuve que vincular los paquetes al repositorio (problema real del TP6, está documentado ahí). Para
+leer, los dos paquetes son **públicos**: `docker pull` de cualquiera de las dos imágenes por su etiqueta funciona sin
+credenciales (lo comprobé con las imágenes de un commit anterior, sin hacer login).
+
+### Por qué el pipeline no publica `latest`; tag contra digest
+
+`latest` es una etiqueta que se **mueve**: apunta a lo último que alguien publicó. Si QA ejecutara `latest`, el
+significado de «la imagen que probé» cambiaría cada vez que alguien publica; dos servicios que piden `latest` con
+minutos de diferencia podrían recibir imágenes distintas, y de un nombre `latest` no se puede volver a un commit. Con
+`sha-<commit>` cada nombre apunta a un solo commit y se puede reconstruir qué se desplegó. Por eso el pipeline
+publica **solo** `sha-<commit>` (no hay `latest` en ninguno de los dos paquetes; la insignia «Latest» que muestra
+GitHub en la página del package no es una etiqueta mía, es el indicador de su versión más reciente).
+
+Un **tag** es un nombre que apunta a una imagen y que, en principio, se puede reasignar; un **digest**
+(`sha256:…`) es el hash del contenido y no se puede reasignar: si cambia un solo bit, cambia el digest. Mi pipeline
+despliega por tag, no por digest. Lo que me protege es que cada `sha-<commit>` se publica una vez, desde el push de
+ese commit. Si alguien moviera a mano un tag a otra imagen, QA y PROD podrían terminar ejecutando contenidos
+distintos bajo el mismo nombre sin que ninguna etiqueta lo delate; solo lo detectaría el digest. Un caso relacionado
+que sí vi: las imágenes del frontend de `ec380fc` y de `15cce3d` sirven **los mismos archivos de aplicación** (los
+mismos nombres con hash, `index-CdrZe9IJ.js` y `index-GimIN-jc.css`) y aun así tienen digests distintos
+(`sha256:d4e6f7ef…` y `sha256:cbe9dac278da9226ebd8afb6113186e3da59ab7041a6278de149781922d6d88b`, este último
+completo, tal como lo mostró el log del job e2e de CI #47): el digest identifica los bits exactos de la imagen, no
+«lo que hace». Una consecuencia práctica: si vuelvo a ejecutar los jobs de build de una corrida, la etiqueta
+`sha-<commit>` se vuelve a publicar con una construcción nueva, y su digest podría cambiar; no probé si pasa, pero
+por eso no re-ejecuto builds de commits ya promovidos.
+
+### Con qué imagen configuré los servicios de Render y por qué no es esa la que corre
+
+Al pasar los servicios a «Existing Image» (en cada uno: Settings → Build → Source → Edit → Existing Image, sin
+credenciales porque los paquetes son públicos) Render pide una imagen inicial. Usé `sha-894381262aed…` (frontend para
+`front-qa` y `front-prod`, backend para `api-qa` y `api-prod`): la del commit `8943812`, el de la release `v6.0.0`.
+Esa no es la que corre ahora en QA ni en PROD. Lo que corre lo decide el `imgURL` que el pipeline manda en cada
+deploy hook, y desde CI #47 es `sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` en los cuatro servicios. La forma de
+saberlo sin confiar en lo que dice la configuración del servicio es leer los *Events* (siguiente sección) y el log de
+la corrida. No verifiqué qué muestra el campo «Image» del panel después de cada deploy; en la defensa lo abro en vivo.
+
+No creé servicios nuevos: cambié la fuente de los cuatro servicios que ya tenía del TP6. Por eso no quedó ningún
+servicio viejo que dar de baja ni que pudiera seguir reconstruyendo desde Git.
+
+### Del tag `v7.0.0` a la imagen, en un paso
+
+El tag es un tag de git, así que me dice un commit, y la etiqueta de la imagen se arma con ese commit:
+
+```
+git rev-list -n1 v7.0.0                        # devuelve el commit sobre el que está el tag
+docker pull ghcr.io/cotykazuf/ingsoft3-tp01-backend:sha-<ese commit>
+docker pull ghcr.io/cotykazuf/ingsoft3-tp01-frontend:sha-<ese commit>
+```
+
+El tag `v7.0.0` es un tag anotado, creado sobre el commit desplegado en PROD, `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`
+(el que GitHub Deployments marca como *Active* en `production`, desplegado por CI #47), y no sobre el último commit de
+`main`. Resultado real de `git rev-list -n1 v7.0.0`: `15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050`. Ese mismo
+`sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` es la etiqueta que se ve en el package del backend y en el del frontend, y
+la que figura en los logs de los jobs de QA y de PROD de CI #47.
+
+### Cómo se comprueba, desde afuera, que un entorno ejecuta la imagen y no una reconstrucción
+
+Cuatro pruebas que se pueden mirar sin confiar en mi palabra:
+
+1. **El log de la corrida.** En el paso que dispara los hooks (público en Actions) se lee, para cada servicio, qué
+   imagen se le pidió (`…-backend:sha-<commit>` y `…-frontend:sha-<commit>`), la respuesta `HTTP 200` de Render y el
+   id del deploy. En CI #47: QA, API `dep-dbcgfkhkjs5s73eb5u5g` y frontend `dep-dbcgfldg1s2s73bgjrp0`; PROD, API
+   `dep-dbd589on74is73adn9m0` y frontend `dep-dbd58aifngtc73flhp70`. Las cuatro peticiones usan el mismo
+   `sha-15cce3dbf1ec…`.
+2. **Los *Events* de cada servicio en Render** (privados; los muestro en vivo). Para cada deploy dicen «Deploy started /
+   Deploy live», «Triggered via Deploy Hook», el `sha-<commit>` y el **mismo id** que el log de GitHub. Los vi para
+   `api-prod` y `front-prod` de CI #47 (22 de octubre de 2026, 3:21 PM). Delante del
+   `sha-` Render muestra un prefijo (`158d7d4` en la API, `a1ac851` en el frontend de PROD); no sé qué significa
+   y no lo uso como prueba: la prueba es la etiqueta `sha-…` y el id del deploy.
+3. **El package del registry.** Esa misma etiqueta existe en los dos paquetes (links arriba) y se puede bajar con
+   `docker pull` sin credenciales.
+4. **Un deploy hecho a mano no pasaría esta prueba.** Un deploy desde el panel de Render no dice «Triggered via
+   Deploy Hook» en *Events* y no tiene una corrida que lo respalde. Además, en el log de deploy de un servicio con
+   imagen del registry no hay pasos de build (lo vi en `front-qa` con una prueba manual: el log arranca directamente
+   nginx).
+
+Para el **frontend** hay una quinta comprobación dentro del pipeline, y es la que impide que las pruebas e2e corran
+contra la versión vieja: el job `e2e` primero compara los archivos `/assets/…` que lista el `index.html` de la imagen
+`sha-<commit>` de esa corrida con los que sirve hoy QA, y no sigue hasta que coinciden (hasta 30 intentos de 15 s; si
+no coinciden, el job falla). Su límite: identifica **solo el frontend**; la API no expone una versión, así que no
+puedo comprobar del mismo modo qué imagen corre la API (para ella la prueba es el Event y el log de la corrida). Y
+las dos veces que lo vi en CI (#43 y #47) dio OK en el primer intento, o sea que el bucle de espera real todavía no
+tuvo que esperar; solo lo probé con simulaciones.
+
+### Qué NO prueba el smoke test (con un caso real)
+
+El smoke de QA y de PROD (los cuatro chequeos que están descritos en el TP6) pregunta si los servicios **responden**:
+`/health`, que `/api/gastos` devuelva una lista, que el frontend sirva la aplicación y que el proxy llegue a la API.
+No pregunta **qué imagen** responde ni si la aplicación **funciona**. Lo mostró mi propia corrida roja (CI #45): con el
+formulario roto (no enviaba el monto), `Desplegar en QA` y su smoke dieron verde, porque el frontend servía la página y
+el proxy llegaba a la API. El smoke también puede pasar contra la versión anterior mientras Render cambia de imagen
+(el deploy a QA dura unos 20 segundos). Para eso están la integración y la e2e, y el paso de espera de arriba para el
+frontend.
+
+### La cadena y el gate: cómo la prueba decide si se promueve
+
+Todo está en **un solo workflow** (`.github/workflows/ci.yml`), que corre con el push a `main`, encadenado con `needs:`:
+
+`build-backend` y `build-frontend` → `deploy-qa` (hooks + smoke) → `integracion` → `e2e` → `deploy-prod` (environment
+`production` con revisor obligatorio, el mismo del TP6).
+
+- `integracion` tiene `needs: deploy-qa`, `e2e` tiene `needs: integracion` y `deploy-prod` tiene `needs: e2e`. Si falta
+  el eslabón del medio, la integración sería un adorno: se pondría roja y la promoción seguiría igual. Con la cadena
+  completa, si un job falla (o se saltea), los siguientes **no arrancan**.
+- Los jobs de despliegue y de prueba tienen `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`: en un
+  PR salen «skipped» y los dos checks requeridos del PR son solo `build-backend` y `build-frontend`.
+- Nada desarma el gate: ni `continue-on-error`, ni `|| true` o `exit 0` después de Playwright, ni `always()` o
+  `!cancelled()` en `deploy-prod`. El único `!cancelled()` está en los pasos que **suben los reportes** de
+  integración y de e2e, para que el reporte exista también cuando las pruebas fallan; no decide nada sobre la promoción.
+- Después de la e2e verde, `deploy-prod` queda en «Waiting for review» hasta que apruebo el environment `production`;
+  en CI #47 aprobé yo (CotyKazuf) y se ve en «Deployment protection rules» de la corrida.
+
+### Las tres pruebas de integración (`frontend/e2e/api.spec.js`)
+
+Son pedidos HTTP con el fixture `request` de Playwright, **sin navegador y sin dobles**, contra la API **de QA ya
+desplegada** (`API_BASE_URL`, su dirección pública) y su base real (`app_qa`). Los datos que crean llevan un nombre
+único con la hora y un sufijo aleatorio (`api-<hora>-<sufijo>`) y los borran comprobándolo.
+
+1. **Alta, lectura y borrado (ciclo completo contra la base real).** `POST /api/gastos` (responde 201) → `GET` que
+   encuentra el gasto creado con sus datos → `DELETE` (204) → `GET` que ya no lo encuentra. Verifica que la API
+   realmente guarda y borra en PostgreSQL, no solo que responde.
+2. **Alta inválida.** `POST` con descripción vacía → 400 con `{ error: 'La descripción es obligatoria' }` y, después,
+   un `GET` que confirma que **no se creó nada** (como el gasto no tiene descripción, lo marco con un valor único en
+   otro campo y compruebo que ese marcador no aparece en la lista).
+3. **Actualización (la tercera, la elegí yo).** `PUT` parcial con `{ monto: 250, categoria: 'Transporte' }` → 200 → `GET`
+   que muestra esos dos cambios guardados y el resto intacto → `PUT` con monto `-5` → 400 con el mensaje de monto y
+   comprobación de que **sigue valiendo 250** → `DELETE` y verificación.
+
+**Por qué esa tercera.** Editar un gasto es el camino de la API con más reglas propias: la actualización es
+*parcial* (un campo ausente conserva su valor; un campo presente se valida con las mismas reglas que el alta) y toca
+la columna `monto`, que PostgreSQL devuelve como texto (`NUMERIC`). Un unitario con la base reemplazada por un doble
+no ve ninguna de las dos cosas (por ejemplo, un error de tipeo en el nombre de una columna del `UPDATE` pasaría todos
+los unitarios y la base real lo rechazaría; no lo probé, es un ejemplo). Si se rompe, quien me escribe es la persona
+que corrigió un gasto y al volver a abrirlo ve el dato viejo, o que logró guardar un dato inválido.
+
+### Los tres flujos e2e (`frontend/e2e/gastos.spec.js`)
+
+Chromium real, contra el **frontend de QA** (`E2E_BASE_URL`), que a su vez le pega a la API de QA; sin `page.route`, sin
+mocks del backend, sin `test.skip`. Cada flujo interactúa (llena, hace clic), afirma sobre **su propio dato** y limpia lo
+que crea. Los datos llevan nombre único `e2e-<flujo>-<hora>-<sufijo>`.
+
+1. **Crear desde la pantalla, verlo y eliminarlo.** Voy a «Agregar gasto», completo el formulario (descripción única,
+   Transporte, Transferencia, $321), guardo y compruebo que **mi fila** aparece en la lista con esa categoría, medio de
+   pago, fecha y monto; hago clic en «Eliminar», la fila desaparece y la API tampoco la devuelve.
+2. **Error de validación.** Escribo una descripción de **solo espacios** (el atributo `required` del navegador la deja
+   pasar, entonces el rechazo viene del **backend**), elijo medio de pago Tarjeta y pongo un marcador único en
+   «Nombre de la tarjeta». Compruebo que el usuario ve el mensaje «La descripción es obligatoria» (`role="alert"`), que
+   la pantalla sigue en el formulario y que la API **no** tiene ningún gasto con ese marcador. Vuelvo con «Volver».
+3. **Editar y comprobar que quedó guardado (la tercera, la elegí yo).** Parto de un gasto propio de $150 en Comida,
+   hago clic en «Editar» (compruebo que el formulario trae la descripción precargada), cambio el monto a 275.5 y la
+   categoría a Transporte, guardo, veo `$275.5` en la fila, **recargo la página** para forzar una lectura nueva desde
+   la API y compruebo que sigue ahí; después lo elimino y verifico que desapareció.
+
+**Por qué ese tercero.** Es lo que el usuario de Mis Gastos hace todos los días: corregir un gasto que cargó mal. Si
+mañana no anda, es lo primero que me van a escribir. Además toca la base (el `page.reload()` obliga a que el dato salga
+de PostgreSQL y no del estado de React). Entre dos candidatos elegí el que pasa por la base.
+
+### Qué NO puse en integración ni en e2e, y por qué (pirámide)
+
+- **No puse en integración:** la matriz completa de validaciones (fecha futura, año distinto del actual, categoría o
+  tipo de tarjeta inválidos, medio de pago): son reglas de `validarCamposGasto` y ya las cubren los unitarios del
+  TP5 (56 casos de backend), que son rápidos y no dependen de QA. Tampoco el `404` de gastos inexistentes, ni el
+  resumen mensual/anual, ni `/health` (eso lo mira el smoke).
+- **No puse en e2e:** los filtros por categoría y mes, los totales, la pantalla de resumen, todas las categorías y
+  medios de pago, los formatos de fecha. La lógica pura (calcular, filtrar, formatear) está en `src/lib/` con 26
+  unitarios. Un navegador real es lento y frágil: lo uso solo para flujos completos que el usuario necesita.
+
+La pirámide, en mi proyecto: **muchos** unitarios en la base (56 de backend y 26 de frontend, rápidos, sin red), **3**
+de integración en el medio y **3** e2e arriba. Cuanto más arriba, más cuesta (tiempo, dependencia de QA, causas de
+fallo ajenas al código) y menos casos conviene tener.
+
+### Qué ve cada capa y por qué no es lo mismo
+
+- **Unitario:** una función aislada y con dobles (`construirDatosGasto`, `guardarGastoEnApi` con `fetch` simulado,
+  `crearGasto` con una `db` simulada). Me dice si **esa pieza** hace bien su cuenta. No ve cómo se conectan las piezas.
+- **Integración:** la API real, con su base real, por la red. Ve lo que un doble esconde: SQL, tipos de Postgres,
+  conexión, variables del entorno. No ve el navegador ni el frontend.
+- **E2E:** una persona (un navegador) usando la pantalla de punta a punta. Ve que las piezas **juntas** hacen el
+  trabajo del usuario, y es la única que ve el frontend armando el pedido. Es la menos precisa para decir *dónde* falló.
+- **El smoke** no es ninguna de las tres: solo pregunta si los servicios responden.
+
+Un caso concreto, hecho a propósito: en la rotura de la demostración, **la única capa que se enteró fue la e2e** (los
+26 unitarios del frontend, el build, la integración y el smoke siguieron en verde).
+
+### Integración amplia (contra QA desplegado) frente a estrecha
+
+La mía es **amplia**: le habla a la API ya desplegada en QA, por su dirección pública y con la base de QA. La
+alternativa **estrecha** sería levantar la API y un Postgres dentro del job de CI y probarla ahí (la consigna no la
+admite en este TP: la base tiene que ser la de QA).
+
+- **Qué gano con la amplia:** pruebo lo que realmente se desplegó: la imagen en Render, sus variables de entorno, la
+  conexión a Neon con SSL, el nombre de la base. Una prueba estrecha puede dar verde con una imagen mal configurada.
+- **Qué pierdo:** es más lenta; depende de que QA esté despierto (cold start) y de que no haya otra corrida usando la
+  base; un rojo puede ser un problema de infraestructura y no de código; y llega tarde, después de desplegar, cuando
+  la estrecha avisaría antes de tocar QA. Tampoco puedo preparar a mi gusto un estado de la base.
+
+### Integración verde + e2e roja: la corrida roja (CI #45)
+
+**Qué rompí y cómo.** Un commit que cambia **código de la aplicación** y no los tests: en `FormularioGasto.jsx`
+(`handleSubmit`) quité `monto` del objeto que se le pasa a `construirDatosGasto`. El formulario sigue mostrando el
+monto, pero el pedido sale con `"monto": null`. Es un cambio de una palabra que compila, pasa los unitarios y el
+build, y deja la API intacta. Antes de subirlo lo comprobé en un entorno local con base real: 26 unitarios, build e
+integración verdes y e2e roja. Commit: `6e41e15` (PR #42).
+
+**Qué mostró la corrida** (https://github.com/CotyKazuf/ingsoft3-tp01/actions/runs/39360725599): `build-backend` ✅,
+`build-frontend` ✅, `Desplegar en QA` con su smoke ✅, `Integración` ✅ (3 passed), `E2E` ❌ y `Desplegar en PROD` sin
+arrancar (0 s, por la dependencia). Ni siquiera llegó a pedir mi aprobación.
+
+**Cómo lo diagnostiqué con los reportes, sin abrir el código:**
+
+- *Reporte e2e:* All 3, Passed 1, Failed 2, Flaky 0. Fallaron los flujos 1 y 3 (los que **guardan**) y pasó el 2 (el de
+  validación). Fallaron también en el reintento (Flaky 0): el fallo es determinista, no una falla pasajera.
+- *Error y pasos:* todos los pasos de llenar el formulario en verde; el que falla es esperar mi fila en la lista
+  (esperado 1, recibido 0, 15 s). Es decir: el formulario se llenó y se hizo clic, pero el gasto nunca llegó a la lista.
+- *Captura de pantalla:* sigue en «Agregar gasto» con el cartel «El monto debe ser un número mayor a 0» **y el campo
+  Monto mostrando 321**. Esa contradicción es la pista: el mensaje lo escribe el backend, así que a la API le llegó
+  algo distinto de lo que muestra la pantalla.
+- *Traza (pestaña Network):* el `POST /api/gastos` salió con el cuerpo `"monto": null` y la respuesta fue
+  `{"error":"El monto debe ser un número mayor a 0"}`.
+- *Reporte de integración:* 3 passed. La API, probada directamente con montos válidos, funciona.
+
+**Qué significa el par.** Integración verde = la API y la base de QA hacen su trabajo. E2E roja = una persona usando la
+pantalla no puede completar lo que necesita. Juntas apuntan a **la capa del medio, entre el navegador y la API**: el
+frontend (o el proxy) no está usando bien el sistema. No hizo falta leer el código para llegar a «el frontend arma mal
+el pedido». Lo que el gate **evitó**: que esa versión llegara a PROD (el job quedó omitido y no se disparó ningún hook
+a PROD en esa corrida). Lo que **no** evitó: que QA quedara sirviendo el frontend roto desde la corrida #45 hasta el
+arreglo (CI #47), porque el gate protege la promoción a PROD, no a QA.
+
+**Cómo salí.** El arreglo (CI #47, commit `15cce3d`, PR #43) fue devolver el `monto` a esa línea. **No toqué ningún
+test**: eran correctos, pedían algo razonable. Cambiarlos para que pasen habría escondido el problema. El resultado:
+integración 3 passed, e2e 3 passed contra la imagen del fix, aprobación mía y PROD con smoke verde; el frontend
+compilado salió idéntico al de antes de la rotura (mismo `index-CdrZe9IJ.js`).
+
+### Qué habría visto si hubiera roto la API
+
+Si hubiera roto la API (por ejemplo, que no validara la descripción, o que `DELETE` no borre), la **integración** habría
+sido la primera en ponerse roja; como la e2e depende de ella (`needs: integracion`), **ni siquiera habría corrido**, y
+`deploy-prod` tampoco. El par habría sido «integración roja, e2e salteada», que apunta a la API y no al navegador. En mi
+entorno local lo comprobé con dos roturas de la API (sin validar la descripción: falla la prueba de alta inválida;
+`DELETE` que no borra: fallan las pruebas de ciclo completo y de actualización por la limpieza verificada). No
+rompí la API en QA.
+
+### Qué clase de bug mi gate no ataja
+
+- Un bug en algo que **no recorren** los tres flujos: filtros, totales, pantalla de resumen, editar otros campos,
+  otras categorías o medios de pago.
+- Problemas **visuales** o de usabilidad que no cambien lo que los tests leen.
+- Diferencias que **solo existen en PROD**: la misma imagen corre con otras variables y otra base (`app_prod`); una
+  variable mal puesta en PROD (la URL del backend, un dato de conexión) o un esquema distinto en esa base no se ve en
+  QA. Lo único que mira PROD después del deploy es el smoke.
+- Qué imagen está corriendo la **API**: el paso de espera identifica solo el frontend.
+- Rendimiento, carga, concurrencia y seguridad.
+
+### Cold start del free tier, timeouts, reintentos y tests flaky
+
+El servicio gratuito de Render se duerme tras un rato sin tráfico y el primer pedido puede tardar cerca de un minuto
+(en el TP6 vi 502 al probar QA a mano y funcionó minutos después sin cambiar nada). Lo resuelvo con **esperas, no
+con pruebas salteadas**:
+
+- **Calentamiento:** antes de las pruebas, un `beforeAll` hace `GET /api/gastos` y lo repite hasta que responde bien
+  (hasta 200 s en integración; en e2e el calentamiento pasa por el frontend de QA, que también despierta a su API).
+- **Timeouts explícitos** en `playwright.config.js`: 90 s por prueba, 15 s por `expect`, 15 s por acción, 60 s por
+  navegación; y `timeout-minutes` de 20 en el job de integración y 30 en el de e2e. Sin `sleep` fijos: las
+  aserciones de Playwright esperan solas hasta su timeout.
+- **Ningún `test.skip`** ni pruebas que se saltean solas si QA no responde: si QA no contesta, la prueba falla.
+- **Reintento:** `retries: 1`. Un test **flaky** es el que a veces pasa y a veces falla con el mismo código. Es peor
+  que no tener test porque entrena a ignorar el rojo («volvé a correrlo») y, tarde o temprano, el día que sea un
+  fallo real lo van a ignorar igual. Qué hace mi configuración para no fabricarlos: datos únicos por prueba, limpieza
+  verificada, calentamiento, timeouts explícitos, traza guardada en el primer reintento y `workers: 1` (las pruebas
+  no se pisan entre sí). El reintento sí tiene un costo que conozco: si una prueba falla y pasa en el reintento, el
+  job queda verde y solo se ve en el reporte como «Flaky»; por eso leo el reporte y no solo el color del job. En la
+  corrida roja los dos flujos fallaron también en el reintento (Flaky 0): era un fallo real, no una falla pasajera.
+- **Esperar la versión nueva del frontend:** el job `e2e` incluye el paso descripto arriba, que espera hasta que QA
+  sirva el frontend de la imagen de esa corrida (hasta 30 intentos de 15 s), y si no ocurre, falla.
+
+### Datos de prueba: limpieza y el riesgo de compartir QA entre corridas
+
+Las dos suites usan la **misma base de QA** y QA es uno solo para todas mis corridas. Lo que hago para no ensuciar:
+
+- Cada prueba fabrica un nombre único (`api-…` o `e2e-…`, con la hora y un sufijo aleatorio): ninguna otra corrida
+  puede usar el mismo, así que una prueba nunca afirma sobre datos de otra.
+- Cada prueba borra lo que creó y **comprueba** que ya no está (por la API, y en e2e también en pantalla).
+- Un `afterEach` borra por la API lo que haya quedado pendiente aunque una aserción falle a mitad de camino.
+- Cómo me daría cuenta si algo quedara: abro `https://misgastos-api-qa.onrender.com/api/gastos` y busco los prefijos
+  `api-` y `e2e-`. Lo hice después de CI #43: cero coincidencias; en QA solo estaban los 3 gastos manuales del TP6.
+
+Riesgo que **no** resolví: dos corridas simultáneas contra QA. Los datos no chocan (nombres únicos), pero el
+`deploy-qa` de una podría cambiar la imagen mientras la otra corre sus pruebas, y no hay una cola para los jobs de
+QA (el grupo de `concurrency` que existe es el de `deploy-prod`). Con una sola persona y un flujo por PR lo considero
+improbable, pero existe. En PROD hice una sola prueba manual (creé `prueba-fix-prod` y la borré).
+
+### Misma imagen del frontend en QA y en PROD
+
+La imagen del frontend no tiene adentro nada que dependa del entorno: tiene la aplicación React compilada (que llama
+siempre a la ruta relativa `/api/...`) y nginx con su plantilla. Lo que cambia entre QA y PROD se configura **por
+variable de entorno al arrancar el contenedor**, en cada servicio de Render: `BACKEND_URL` (a qué API reenvía nginx
+`/api/`) y `DNS_RESOLVER`; el detalle está en la sección «Qué quedó por variable y qué quedó adentro de la imagen»
+del TP6. En la API, lo que distingue los entornos son las variables de conexión (`DB_HOST`, `DB_USER`, `DB_PASSWORD`,
+`DB_NAME`…): `app_qa` en QA y `app_prod` en PROD, que viven en Render y no en la imagen ni en el repositorio. En el
+TP6 solo logré que la imagen *pudiera* ser la misma; ahora **lo es**: en CI #47, QA y PROD recibieron la misma
+etiqueta `sha-15cce3dbf1ec4d43f6a9f9d32c5a3ac5635cb050` para el frontend y para la API.
+
+### Problemas encontrados y cómo se resolvieron (TP7)
+
+- **Los `<label>` del formulario no estaban asociados a sus campos.** Al escribir los flujos e2e, `getByLabel` no
+  encontraba los campos. Hice el cambio mínimo en `FormularioGasto.jsx`: `htmlFor`/`id` en los siete campos y
+  `role="alert"` en el mensaje de error. Es el único cambio de código de la aplicación (además de la rotura y su
+  arreglo) y lo hice porque la prueba lo necesitaba, no por una funcionalidad nueva.
+- **Riesgo, antes de que ocurriera: el smoke puede pasar contra la imagen vieja mientras Render cambia.** El deploy a
+  QA dura unos 20 s. Si la integración o la e2e corrieran en ese instante, podrían probar la versión anterior (y la
+  demostración de la rotura podía dar un falso verde). Agregué el paso de espera al job `e2e`. Su límite quedó
+  explicado arriba: solo el frontend, y todavía no tuvo que esperar nunca (OK en el primer intento en CI #43 y #47).
+- **502 al abrir QA después de estar inactivo.** Al convertir `front-qa` a imagen del registry, abrir
+  `/api/gastos` devolvió la página 502 de Render y la lista vino vacía; al despertar la API (abriéndola directamente)
+  el frontend respondió bien. La causa más probable es el cold start de la API gratuita (no la medí). De ahí el
+  calentamiento previo a las pruebas.
+- **Vitest habría tomado las pruebas de Playwright como suyas.** Los archivos de `e2e/` son del runner de Playwright y
+  no deben correr con `npm test`. Agregué `exclude` de `e2e/**` en `vitest.config.js` y lo comprobé con un archivo
+  señuelo.
+- **`npm ci` mostró «1 high severity vulnerability».** Aviso de `npm audit` que apareció al instalar en mi máquina.
+  No lo analicé, así que no sé de qué paquete viene ni si afecta a la aplicación; queda anotado, sin resolver.
+- **QA estuvo sirviendo el frontend roto varios días** (desde la corrida #45 hasta el arreglo en CI #47). Fue
+  intencional y esperable (el gate protege a PROD, no a QA), pero lo registro como límite del diseño.
+- **Aviso de GitHub:** `ubuntu-latest` empieza a migrar a Ubuntu 26 desde el 19 de octubre de 2026. No me falló nada,
+  pero podría afectar `npx playwright install --with-deps` en el job e2e; si pasara, la salida es fijar
+  `runs-on: ubuntu-24.04` en ese job. No lo cambié.
+- **El prefijo que Render muestra delante de `sha-…` en los *Events*** (`158d7d4`, `a1ac851`, `b87f7b8`…) no
+  coincide con ningún digest que haya visto y no sé qué es; no lo usé como evidencia.
+
+No encontré ningún otro problema; no agrego ninguno que no haya ocurrido.
+
+### Uso de inteligencia artificial (TP7)
+
+Usé Claude (Anthropic) en un proyecto de Claude en el que trabajamos por fases. La IA escribió: la configuración de
+Playwright (`playwright.config.js`, scripts y dependencia en `package.json`, exclusión en `vitest.config.js`); las tres
+pruebas de integración (`api.spec.js`) y los tres flujos e2e (`gastos.spec.js`); el cambio de accesibilidad en
+`FormularioGasto.jsx`; los cambios de `ci.yml` (el `imgURL` en los hooks, los jobs `integracion` y `e2e` con `needs`, el
+reporte como artefacto y el paso que espera al frontend); **la rotura intencional** (la propuso, justificó por qué no
+la atrapan los unitarios y la aplicó localmente) y **su arreglo** (devolver una palabra); y el borrador de este
+documento.
+
+Yo hice todo lo de Git y GitHub (ramas, commits, pushes, PRs #40 a #43, merges), cambié los cuatro servicios de Render
+a «Existing Image», probé con Docker Compose en mi máquina que la integración (3 passed) y los flujos e2e (3 passed)
+funcionaban antes de ponerlos en el pipeline, aprobé el environment `production`, bajé los reportes de la corrida roja y
+los abrí con `playwright show-report`, miré en el trace el pedido con `"monto": null` y la respuesta del backend
+(siguiendo los pasos que me fue indicando la IA), revisé los *Events* de Render de PROD, probé a mano en PROD que se
+puede crear y borrar un gasto, y comprobé que QA no quedó con datos de prueba.
+
+### Cómo se verificó lo producido por la IA (TP7)
+
+**Por parte de la IA, en un entorno aparte (sin Docker ni acceso a mis servicios):** se levantó una API Express real con
+PostgreSQL 16 real, el frontend compilado servido por nginx y un Chromium real, y se corrieron las mismas pruebas:
+integración 3 passed y e2e 3 passed (dos corridas seguidas, con la tabla vacía al final). Se hicieron roturas
+deliberadas para ver que las pruebas **fallen**: API sin validar la descripción, `DELETE` que no borra, «Editar» que
+siempre crea, «Eliminar» sin efecto; cada rotura hizo fallar la prueba esperada. Se validó el YAML con `actionlint` y
+se simuló el paso de espera con un `docker` falso y un servidor HTTP (QA viejo, QA que cambia a mitad de camino, QA
+caído, imagen sin assets). Esas pruebas las ejecutó la IA; no las repetí yo. También reprodujo la rotura de la
+demostración (integración verde y e2e roja) antes de que yo la subiera.
+
+**Por mi parte, con lo que vi:** las dos suites contra mi Docker Compose; las corridas reales de Actions (CI #43,
+CI #45 y CI #47) con el log de los hooks y de las dos suites; los reportes y la traza de la corrida roja; los *Events*
+de Render; los dos packages con sus etiquetas; y la prueba manual en PROD. Lo que **no** pude verificar yo y sigue
+sin comprobarse: que el bucle de espera del paso e2e funcione cuando realmente tiene que esperar (solo se simuló), y
+qué versión de la API corre en cada momento más allá del Event y del log.
