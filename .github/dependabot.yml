@@ -1,0 +1,21 @@
+# TP9 - Dependabot: vigila las dependencias del proyecto y abre PRs cuando hay versiones nuevas.
+# Solo se lee desde la rama por defecto (main).
+version: 2
+updates:
+  # Backend (Node.js / Express): backend/package.json + backend/package-lock.json
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  # Frontend (React / Vite): frontend/package.json + frontend/package-lock.json
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  # Actions usadas en .github/workflows/ci.yml (checkout, docker/*, upload-artifact)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
