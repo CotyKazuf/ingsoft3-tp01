@@ -18,6 +18,11 @@ resource "neon_project" "preprod" {
   # Sin esta linea el primer apply falla: el provider pide por defecto 86400 segundos
   # (un dia) de historial y el tope del plan gratuito de Neon es 21600 (seis horas).
   history_retention_seconds = 21600
+
+  # Sin esta linea Neon elige la region por su cuenta y NO siempre elige la misma: la base de
+  # preprod salio en us-east-1 y, despues de un destroy + apply, en us-west-2. Fijarla hace que
+  # el entorno quede igual cada vez, y en la misma zona que los servicios de Render (virginia).
+  region_id = "aws-us-east-1"
 }
 
 resource "neon_role" "preprod" {
