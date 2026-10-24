@@ -1320,3 +1320,78 @@ CI #45 y CI #47) con el log de los hooks y de las dos suites; los reportes y la 
 de Render; los dos packages con sus etiquetas; y la prueba manual en PROD. Lo que **no** pude verificar yo y sigue
 sin comprobarse: que el bucle de espera del paso e2e funcione cuando realmente tiene que esperar (solo se simuló), y
 qué versión de la API corre en cada momento más allá del Event y del log.
+
+## TP8 — Infraestructura como Código
+
+### Riel elegido y versiones
+
+Elegí un riel **declarativo con Terraform**: en la carpeta `infra/` escribo cómo tiene que ser el entorno de preprod
+(un proyecto y una base en Neon y dos servicios en Render que ejecutan las imágenes del TP7) y Terraform compara eso
+con lo que existe y calcula qué crear o destruir. Dos cosas del riel declarativo las usé de verdad: `terraform plan`
+muestra qué va a pasar antes de que pase (leí cada plan antes de confirmar), y repetir `plan` sobre un entorno que
+ya está como dice el código da `No changes`. La alternativa era un script que llame a las APIs de Neon y de Render
+paso a paso; no la implementé.
+
+- **Terraform 1.16.6** (instalado en Windows con `winget`). En `versions.tf` pido `>= 1.5`.
+- **Provider de Neon:** `kislerdm/neon`, versión **0.18.0**.
+- **Provider de Render:** `render-oss/render`, versión **1.9.1**.
+
+Las dos versiones de provider están fijadas **exactas** (sin `~>` ni `>=`), y `infra/.terraform.lock.hcl` está
+versionado: así un `terraform init` en otra máquina baja los mismos binarios y no una versión nueva sin que yo lo
+decida. Preprod ejecuta las mismas imágenes del TP7 (`sha-15cce3d…`, la de PROD y del tag `v7.0.0`): Terraform no
+construye nada. QA y PROD no están declarados en `infra/`, por eso Terraform no puede tocarlos.
+
+**Qué no está en el repositorio.** Las credenciales (`NEON_API_KEY`, `RENDER_API_KEY`, `RENDER_OWNER_ID` y
+`TF_VAR_neon_org_id`) viven solo en variables de entorno de mi terminal: no hay bloques `provider` con claves ni
+`.tfvars`. La contraseña de la base la genera Neon y llega al servicio de Render por referencia entre recursos
+(`neon_role.preprod.password`), sin escribirse en ningún archivo ni en ningún `output`. El estado
+(`terraform.tfstate`, que sí guarda esa contraseña) y la carpeta `.terraform/` están en `.gitignore`, y agregué esas
+reglas **antes del primer `init`**.
+
+### Problemas reales y cómo se resolvieron
+
+- **`org_id is required`.** El primer `apply` del proyecto de Neon falló porque la API exige una organización. Lo
+  resolví con una variable `neon_org_id` sin valor por defecto, que Terraform toma de `TF_VAR_neon_org_id`: así el
+  identificador de mi cuenta no queda escrito en un archivo de un repositorio público.
+- **Error transitorio de red** (`console.neon.tech` no resolvía) en un `plan`/`apply`. No toqué nada: reintenté y
+  funcionó.
+- **La base nueva estaba vacía.** Con los dos servicios de Render creados, `/health` respondía 200 pero
+  `/api/gastos` daba 500 con `relation "gastos" does not exist`. Eso a la vez comprobó que la API sí llegaba a la base
+  nueva. El backend no crea tablas (el `init.sql` solo lo ejecuta Docker Compose). Lo resolví con un recurso
+  `terraform_data.esquema` que corre `backend/db/init.sql` contra la base de preprod, una vez, justo después de crearla
+  (un contenedor `postgres:16-alpine` solo para usar `psql`, con `ON_ERROR_STOP=1` para que un error de SQL haga fallar
+  el `apply`). Límite que acepto: ese paso necesita **Docker Desktop encendido** y está escrito para PowerShell en
+  Windows; en otra máquina habría que adaptarlo.
+- **El primer intento de ese paso falló en Windows.** El `local-exec` por defecto usa `cmd` y el comando
+  (con un `sh -c "…"` con comillas) llegó roto al contenedor (`unterminated quoted string`). La causa más probable es
+  que `cmd` perdió las comillas dobles; no lo comprobé aislando el caso. Lo resolví usando PowerShell como intérprete y
+  un comando sin comillas, con el SQL en base64 en una variable de entorno. Terraform dejó el recurso marcado como
+  `tainted` y lo reemplazó en el siguiente `apply`.
+- **La región de Neon cambió entre dos ciclos.** No había fijado `region_id`: la base de preprod salió en `us-east-1` y,
+  después de un `destroy` y un nuevo `apply`, en `us-west-2`. No sé por qué Neon eligió distinto. Lo resolví fijando
+  `region_id = "aws-us-east-1"` (la misma zona que los servicios de Render, Virginia); repetí el ciclo y esa vez la base
+  salió en `us-east-1`.
+
+Dato de configuración (no un problema que me haya ocurrido): `history_retention_seconds = 21600` está fijado porque el
+plan gratuito de Neon tiene ese tope y el valor por defecto del provider es mayor.
+
+No encontré ningún otro problema; no agrego ninguno que no haya ocurrido.
+
+### Uso de inteligencia artificial (TP8)
+
+Usé Claude (Anthropic) en el mismo proyecto de Claude de los TP anteriores, trabajando por fases. La IA escribió los
+archivos de `infra/` (`versions.tf`, `variables.tf`, `main.tf`, `outputs.tf`), el bloque de Terraform del
+`.gitignore`, el recurso `terraform_data` con el `local-exec` y su corrección a PowerShell, la propuesta de fijar la
+región, y el borrador de esta sección. También me guió en los experimentos de defensa (borrar un recurso a mano y ver
+el *drift*, crear una base que Terraform no conoce, probar `prevent_destroy`).
+
+Yo hice todo lo de Git y GitHub, creé las credenciales en las consolas de Neon y de Render y las cargué en variables de
+entorno sin pegarlas completas en el chat, ejecuté en mi máquina todos los `plan`, `apply` y `destroy` (leyendo cada
+plan antes de confirmar), y revisé a mano las consolas de Render y de Neon después de crear y después de destruir.
+
+**Cómo verifiqué lo producido por la IA.** Con `terraform fmt` y `terraform validate`; con el `plan` previo a cada
+`apply`; con un segundo `plan` que dio `No changes` después de aplicar; con `/health`, `/api/gastos` directo en la API,
+`/api/gastos` a través del frontend y el frontend abierto en el navegador; con los nombres de las variables de entorno
+en el panel de Render; con la consola de Neon (proyecto, región y base) y con dos ciclos completos de `destroy` y
+`apply` desde cero. Lo que **no** verifiqué: por qué Neon cambió de región sin que la fijara, y la causa exacta del
+fallo de comillas en `cmd`.
