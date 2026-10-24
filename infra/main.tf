@@ -102,3 +102,41 @@ resource "render_web_service" "front" {
     DNS_RESOLVER = { value = "8.8.8.8" }
   }
 }
+
+# ---------------------------------------------------------------------------------------
+# Parte 3: el esquema de la base (la tabla "gastos").
+#
+# Una base recien creada en Neon esta VACIA y nuestro backend no crea tablas: sin esto,
+# /health responde pero /api/gastos da 500 ("relation gastos does not exist"). Este recurso
+# corre backend/db/init.sql (el mismo archivo que usa Docker Compose) contra la base de
+# preprod, UNA vez, justo despues de crearla. Asi un destroy + apply deja preprod igual.
+#
+# Como funciona: levanta un contenedor con la imagen oficial de Postgres solo para usar su
+# cliente "psql" (hace falta Docker Desktop encendido al aplicar). Los datos de conexion
+# salen de los recursos de Neon y viajan por variables de entorno, no por la linea de
+# comandos. El SQL viaja en base64 para no pelear con las comillas de la terminal.
+# Esta parte esta pensada para Windows (PowerShell), que es donde se corre el TP.
+# ON_ERROR_STOP=1 hace que un error de SQL haga fallar el apply (no se esconde nada).
+# ---------------------------------------------------------------------------------------
+resource "terraform_data" "esquema" {
+  # Se vuelve a ejecutar solo cuando la base se crea de nuevo (cambia su id). init.sql es un
+  # CREATE TABLE sin "IF NOT EXISTS": correrlo dos veces sobre la misma base daria error.
+  triggers_replace = [neon_database.preprod.id]
+
+  provisioner "local-exec" {
+    # Se corre con PowerShell (Windows) y SIN comillas: con "cmd" las comillas de un sh -c se
+    # pierden en el camino y el comando llega roto al contenedor. Decodifica el SQL y se lo
+    # manda por stdin (-i) al psql del contenedor.
+    interpreter = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
+    command     = "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:INIT_SQL_B64)) | docker run --rm -i -e PGHOST -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE postgres:16-alpine psql -v ON_ERROR_STOP=1"
+
+    environment = {
+      PGHOST       = neon_project.preprod.database_host
+      PGUSER       = neon_role.preprod.name
+      PGPASSWORD   = neon_role.preprod.password
+      PGDATABASE   = neon_database.preprod.name
+      PGSSLMODE    = "require"
+      INIT_SQL_B64 = filebase64("${path.module}/../backend/db/init.sql")
+    }
+  }
+}
