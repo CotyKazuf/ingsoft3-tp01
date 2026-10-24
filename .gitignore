@@ -20,3 +20,27 @@ coverage/
 # reportes y artefactos de Playwright (se generan con npm run test:integracion / test:e2e)
 playwright-report/
 test-results/
+
+# Terraform (TP8). Se ignoran ANTES del primer init/apply, porque el estado guarda
+# contrasenas en texto plano y no puede llegar a un repositorio publico.
+# El estado (terraform.tfstate, su .backup y el archivo de bloqueo)
+*.tfstate
+*.tfstate.*
+# Los providers descargados por terraform init (pesan cientos de MB y se vuelven a bajar)
+.terraform/
+# Valores locales de variables (pueden llevar datos que no se publican)
+*.tfvars
+*.tfvars.json
+# Archivos de plan guardados (terraform plan -out=...): pueden contener valores sensibles
+*.tfplan
+tfplan
+# Registros de caidas de Terraform
+crash.log
+crash.*.log
+# Overrides locales: son para uso personal, no se comparten
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# OJO: .terraform.lock.hcl NO se ignora. Tiene que versionarse (fija las versiones exactas
+# de los providers y sus hashes). Por eso ninguna regla de arriba lo alcanza.
