@@ -1395,3 +1395,114 @@ plan antes de confirmar), y revisé a mano las consolas de Render y de Neon desp
 en el panel de Render; con la consola de Neon (proyecto, región y base) y con dos ciclos completos de `destroy` y
 `apply` desde cero. Lo que **no** verifiqué: por qué Neon cambió de región sin que la fijara, y la causa exacta del
 fallo de comillas en `cmd`.
+
+## TP9 — DevSecOps + Observabilidad + Continuous Feedback
+
+### Dependabot: el PR que mergeé (#55)
+
+Agregué `.github/dependabot.yml` con tres ecosistemas, revisados cada semana: `npm` en `/backend`, `npm` en `/frontend` y
+`github-actions`. No puse `nuget` porque mi backend es Node. Dependabot abrió 12 PRs minutos después de que el archivo
+llegó a `main`.
+
+El PR que mergeé es el [#55](https://github.com/CotyKazuf/ingsoft3-tp01/pull/55): actualiza **`pg` (el cliente de
+PostgreSQL del backend) de 8.23.0 a 8.23.1**, un cambio de *patch*. Cambió solo `backend/package-lock.json`
+(`package.json` no cambia porque el rango `^8.23.0` ya admite 8.23.1) y subieron con él tres paquetes del mismo
+repositorio (`pg-connection-string`, `pg-protocol`, `pg-cloudflare`).
+
+**Por qué me animé a mergearlo:** es un patch de una librería que uso de forma simple (solo `pool.query` con
+parámetros `$1`; no uso sentencias con nombre, cursores ni el modo pipeline), el cambio queda limitado al lockfile, leí
+los títulos del changelog y casi ninguno toca algo que yo use (el único punto a vigilar era la validación del
+certificado del servidor al conectar, que iba a comprobar la integración con la base real de QA), y los dos builds del
+PR estaban en verde. No leí el código de
+`pg`, solo esos títulos. El puntaje de compatibilidad de Dependabot (72 %) no lo tomé como veredicto.
+
+**Qué verificó mi pipeline:** en el PR, `build-backend` y `build-frontend` (que corren los tests y el coverage dentro de
+Docker, con el umbral como compuerta) y el análisis de CodeQL. Mergeé sin `[skip ci]` a propósito para que en `main`
+corriera la cadena completa: deploy a QA, pruebas de integración contra la API de QA con base real, e2e, y el deploy a
+PROD con mi aprobación y el smoke test. La corrida terminó en verde (CI #63). La integración con base real era lo que
+más me importaba, porque `pg` es lo que conecta con Neon.
+
+**Los que no mergeé:** las actualizaciones de `vitest` y `@vitest/coverage-v8` a 5.0.5 (cambio *major*) salieron en rojo
+en el pipeline: la compuerta frenó la actualización y las dejé abiertas. Las demás (express, dotenv, react, vite,
+`actions/checkout`) pasaron en verde pero no eran necesarias y no las mergeé.
+
+**Seguridad (configuración, sin cambios de código):** Dependabot alerts y security updates están activados; **push
+protection** está activa (el repositorio es público y GitHub la trae encendida; no hice la demo con un secreto real);
+y **CodeQL** quedó con *default setup* (JavaScript/TypeScript y GitHub Actions). Su primer análisis dio una alerta:
+`Missing rate limiting` en `backend/index.js` (`GET /api/gastos` consulta la base sin límite de pedidos). Es real; el
+riesgo práctico es bajo (app sin datos sensibles; lo que se gasta es la cuota gratuita de Render y Neon). **Todavía no
+la arreglé ni la descarté** y la dejo abierta a propósito.
+
+### Monitoreo y Sentry
+
+**UptimeRobot (monitor externo).** Monitor HTTP sobre `/health` de la API de PROD, cada 5 minutos (el mínimo del plan
+gratuito). Para provocar la caída suspendí el servicio en Render a las 21:56 del 24/10. UptimeRobot declaró el
+incidente y mandó el mail a las 22:00:07. **Tiempo real de detección: ≈ 4 minutos** (entre 3 y 4, porque anoté la hora
+de la suspensión al minuto; el primer chequeo fallido fue a los ~3 min 20 s). Es coherente con un chequeo cada 5
+minutos. Reanudé el servicio a las 22:03 y el incidente figuró resuelto a las 22:15:20; UptimeRobot lo midió en
+15 min 14 s, que es una cota superior (incluye el arranque de Render y el intervalo del monitor). Al terminar dejé el
+monitor en pausa.
+
+**Sentry.** Dos proyectos (backend Node y frontend React). Los llevé a PROD por el pipeline normal. El `SENTRY_DSN` del
+backend existe solo en las variables de entorno de Render PROD; el DSN del frontend es público y va en el código porque
+solo permite enviar eventos (el token privado de Sentry no está en ningún lado).
+
+- **Error real:** agregué un endpoint temporal `GET /api/falla` que lanza un `Error`, lo llevé a PROD por el pipeline,
+  lo llamé 4 veces y Sentry registró **un** issue (`Falla intencional de prueba (TP9)`, entorno `production`, sin
+  datos de usuario). Fueron 4 llamadas pero 1 evento porque el SDK agrupa errores idénticos consecutivos. Después
+  quité el endpoint con otro PR, volví a desplegar y comprobé que `/api/falla` responde 404. La versión final no lo tiene.
+- **Uso real** (backend, últimos 14 días; el tráfico lo generé yo usando la app, así que mide uso de prueba):
+
+| Operación | Requests | P50 | P95 |
+|---|---|---|---|
+| `GET /api/gastos` | 31 | 5,77 ms | 630,29 ms |
+| `POST /api/gastos` | 7 | 52,78 ms | 177,69 ms |
+| `PUT /api/gastos/:id` | 5 | 10,61 ms | 119,86 ms |
+| `DELETE /api/gastos/:id` | 2 | 19,55 ms | 30,78 ms |
+
+- **Operación más usada: `GET /api/gastos`** (31 requests).
+- **Operación más lenta:** depende de qué mido. En la cola (P95) es `GET /api/gastos`, con 630,29 ms. Por mediana, la
+  más lenta es `POST /api/gastos`, con 52,78 ms. La muestra individual más lenta fue de 634 ms. Ocurrió después de
+  unos 17 minutos sin tráfico, así que **sospecho** que es el arranque en frío del plan gratuito de Render, pero **no
+  lo comprobé**.
+- **Frontend:** muy pocas muestras (en una ventana de una hora hubo 4 cargas de página y 9 llamadas a `/api`); no saco
+  conclusiones de esos números.
+- **Continuous Feedback:** convertí ese dato en una tarjeta del tablero del TP3:
+  [#64, investigar la latencia de `GET /api/gastos`](https://github.com/CotyKazuf/ingsoft3-tp01/issues/64). No la
+  resolví; la tarjeta propone verificar si la causa es el arranque en frío y volver a medir el P95.
+
+### Problemas encontrados y cómo se resolvieron (TP9)
+
+- **Sentry 11 ignora `ignoreTransactions`.** Quería que `/health` no apareciera en las mediciones y esa opción no tenía
+  efecto con la versión 11. Lo resolví con `httpIntegration({ ignoreIncomingRequests })` y comprobé con un colector
+  falso que `/health` no aparece.
+- **La configuración por defecto de Sentry mandaba el cuerpo de los requests.** En una prueba local, la descripción de un
+  gasto viajaba dentro del evento de error. Lo apagué con `dataCollection` (sin datos de usuario, cookies, encabezados ni
+  cuerpos) y repetí la prueba, en el backend y con un navegador real: ya no aparece.
+- **Mis `catch` no le avisaban a Sentry.** Los cuatro `catch` del backend responden 500 por su cuenta, sin pasar por el
+  manejador de errores de Express, así que Sentry no los veía. Agregué `Sentry.captureException(err)` en cada uno.
+- **El frontend no mandó nada durante 14 días.** Con mi Chrome de siempre, Sentry mostraba 0 datos del frontend. Verifiqué
+  que el código en PROD sí inicializa Sentry (DSN correcto, entorno `production`) y que desde un navegador sin mis
+  extensiones sí llegaron datos. **La causa más probable es una extensión del navegador que bloquea Sentry, pero no lo
+  comprobé.**
+- **Algo que vi y no cambié (viene de un TP anterior):** sin `NODE_ENV=production`, Express devuelve el *stack trace* en
+  las respuestas 500 (lo comprobé localmente). Expone detalles internos; no lo toqué porque no era parte de esta
+  consigna, y queda como mejora pendiente.
+
+No encontré otros problemas y no agrego ninguno que no haya ocurrido.
+
+### Uso de inteligencia artificial (TP9)
+
+Usé Claude (Anthropic) en el mismo proyecto de Claude de los TP anteriores, trabajando por fases. La IA escribió
+`dependabot.yml`, `backend/instrument.js`, `frontend/src/sentry.js`, los cambios en `backend/index.js` y
+`frontend/src/main.jsx`, el endpoint temporal `/api/falla` y su retiro, y el borrador de esta sección. También analizó
+el PR de Dependabot y el hallazgo de CodeQL, y me guió en la configuración de UptimeRobot, Sentry y Render.
+
+Yo hice todo lo de Git y GitHub, creé las cuentas y los proyectos de UptimeRobot y de Sentry, cargué las variables en
+Render, suspendí y reanudé el servicio, y aprobé a mano cada despliegue a PROD.
+
+**Cómo verifiqué lo producido por la IA.** Con los tests del backend y del frontend (56 y 26 tests en verde) y el
+coverage (backend: 78,89 % de líneas y 90 % de ramas contra umbrales de 70 y 80); con `npm run build`; con un colector
+falso de Sentry y un navegador real para comprobar qué datos salen; con el pipeline completo en cada PR; con `/health`
+y `/api/gastos` en PROD; con el evento del error en Sentry (entorno `production`, sin datos de usuario). Lo que **no** verifiqué: la causa del pico de 634 ms (arranque en
+frío) ni por qué el frontend no reportaba desde mi Chrome.
