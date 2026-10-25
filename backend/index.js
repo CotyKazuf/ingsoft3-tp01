@@ -169,13 +169,6 @@ app.delete('/api/gastos/:id', async (req, res) => {
     responder(res, await eliminarGasto(pool, Number(req.params.id)));
 });
 
-// TEMPORAL (TP9): endpoint de prueba que lanza un error a proposito, solo para que Sentry
-// registre un evento real desde PROD. No lee ni escribe la base, no usa secretos y no recibe
-// datos. Se agrega en este cambio y se QUITA en el siguiente (no debe quedar en la version final).
-app.get('/api/falla', () => {
-    throw new Error('Falla intencional de prueba (TP9)');
-});
-
 // Captura en Sentry los errores no controlados de las rutas (despues de todas las rutas).
 // Sin SENTRY_DSN no hace nada.
 Sentry.setupExpressErrorHandler(app);
