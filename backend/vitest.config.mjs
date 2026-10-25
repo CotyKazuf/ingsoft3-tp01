@@ -15,10 +15,11 @@ export default defineConfig({
       // validaciones, crear/actualizar/eliminar y las rutas). Un archivo nuevo en la raiz
       // entra solo en la medicion, y si no tiene tests, baja el porcentaje.
       include: ['*.js'],
-      // QUE NO SE MIDE: db.js, que solo configura el pool de conexion a PostgreSQL con las
-      // variables de entorno (configuracion pura, sin logica propia).
+      // QUE NO SE MIDE: db.js (configura el pool de conexion a PostgreSQL con variables de
+      // entorno) e instrument.js (inicializa Sentry con variables de entorno): los dos son
+      // configuracion pura, sin logica propia.
       // Los tests (tests/) y vitest.config.mjs quedan fuera porque no estan en el include.
-      exclude: ['db.js'],
+      exclude: ['db.js', 'instrument.js'],
       // Salidas: text = tabla en la consola/log; html = reporte navegable (coverage/index.html);
       // lcov = formato estandar de herramientas; json-summary = totales faciles de leer por un script
       reporter: ['text', 'html', 'lcov', 'json-summary'],

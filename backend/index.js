@@ -1,3 +1,6 @@
+// Debe ser lo PRIMERO que se carga (ver instrument.js).
+require('./instrument');
+const Sentry = require('@sentry/node');
 const express = require('express');
 const pool = require('./db');
 
@@ -73,6 +76,7 @@ async function crearGasto(db, datos) {
         return { status: 201, body: result.rows[0] };
     } catch (err) {
         console.error(err);
+        Sentry.captureException(err);
         return { status: 500, body: { error: 'Error al crear el gasto' } };
     }
 }
@@ -108,6 +112,7 @@ async function actualizarGasto(db, id, datos) {
         return { status: 200, body: result.rows[0] };
     } catch (err) {
         console.error(err);
+        Sentry.captureException(err);
         return { status: 500, body: { error: 'Error al actualizar el gasto' } };
     }
 }
@@ -121,6 +126,7 @@ async function eliminarGasto(db, id) {
         return { status: 204 };
     } catch (err) {
         console.error(err);
+        Sentry.captureException(err);
         return { status: 500, body: { error: 'Error al eliminar el gasto' } };
     }
 }
@@ -146,6 +152,7 @@ app.get('/api/gastos', async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         console.error(err);
+        Sentry.captureException(err);
         res.status(500).json({ error: 'Error al consultar los gastos' });
     }
 });
@@ -161,6 +168,10 @@ app.put('/api/gastos/:id', async (req, res) => {
 app.delete('/api/gastos/:id', async (req, res) => {
     responder(res, await eliminarGasto(pool, Number(req.params.id)));
 });
+
+// Captura en Sentry los errores no controlados de las rutas (despues de todas las rutas).
+// Sin SENTRY_DSN no hace nada.
+Sentry.setupExpressErrorHandler(app);
 
 // Solo se abre el puerto si el archivo se ejecuta directamente (node index.js).
 // Si otro archivo lo importa (por ejemplo un test), no se levanta ningun servidor.
