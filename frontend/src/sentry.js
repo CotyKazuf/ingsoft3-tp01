@@ -6,8 +6,9 @@ import * as Sentry from '@sentry/react'
 // que baja el navegador (cualquiera lo ve en las herramientas del navegador) y solo permite
 // ENVIAR eventos a ese proyecto, no leer nada. Lo que SI es secreto (y no va nunca al
 // repositorio) es el auth token / API key privada de Sentry, que sirve para leer y administrar.
-// Vacio = Sentry apagado (no se envia nada). Se completa cuando se crea el proyecto en Sentry.
-const DSN_PUBLICO = ''
+// Si esta vacio, Sentry queda apagado (no se envia nada).
+const DSN_PUBLICO =
+  'https://74350e5b1d0d5a48d432e4c4d8750403@o4512314364657664.ingest.us.sentry.io/4512314396639232'
 
 // "Build once, deploy many": la MISMA imagen de este frontend se usa en QA y en PROD, asi que el
 // entorno no puede quedar fijado al compilar. Se deduce de la direccion desde la que se abre.
